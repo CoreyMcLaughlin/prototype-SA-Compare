@@ -42,7 +42,7 @@ The layout should feel like Trackman, and it should not copy today's Shot Analys
 12. Closing the list without choosing leaves both slots unchanged.
 13. **Video** shows a mock swing clip for that shot: a frame, play, and pause. A progress bar moves while it plays. No real video file is required.
 14. **Graph** shows a 3D motion analysis (3DMA) view of that shot only: the player and the club in the swing, recognizable as 3DMA at a glance. 3DMA is its own feature. In this prototype it is only a view inside the slot. It does not change compare. There is no shared 3D scene, no overlay of the two swings, and no 3DMA tools (no joint editing, no metric picker, and no separate 3DMA screen). Choosing Graph on one slot does nothing to the other slot.
-15. **Trajectory** shows a side view and a top view of that shot's ball flight, with carry and apex labeled. When the prototype is built, this view uses the shot tracker. The tracker does not connect to a live radar. Mock shot data drives it.
+15. **Trajectory** shows a side view and a top view of that shot's ball flight, with carry and apex labeled. Shots that come from the shot tracker draw the real flight the radar measured, and the bounce and roll after landing. Mock shots draw a simple curve from carry, height and offline.
 16. **Dispersion** shows a target and that shot's landing, with carry and offline. If the shot belongs to a session, other shots with the same club in that same session appear as lighter marks. A tour shot shows only that shot against the target.
 17. **Data tiles** show the ball and club numbers for that shot, with units. The set is: ball speed (mph), launch angle (°), launch direction (°), spin rate (rpm), spin axis (°), carry (yd), total (yd), height (yd), landing angle (°), club speed (mph), attack angle (°), club path (°), face angle (°), face to path (°), dynamic loft (°), smash factor.
 18. **Table** shows the same numbers as Data tiles, in a single list of label and value.
@@ -57,7 +57,8 @@ The layout should feel like Trackman, and it should not copy today's Shot Analys
 - Saving a comparison, or sending it to someone.
 - Search, filters, and sorting in the shot list.
 - The 3DMA feature itself. Graph only shows a 3DMA view of the shot in that slot. It does not add 3DMA tools, a separate 3DMA screen, or any compare behavior.
-- Real video files, a live radar connection, or a backend. The shot tracker is in the prototype. A live Trackman radar is not.
+- Real video files or a backend.
+- Choosing which radar to use, or radar settings, beyond what the shot tracker component already offers.
 - The rest of the Trackman UI/UX Game Engine, beyond the shot tracker.
 - Sign-in, and switching which player is in focus.
 - Phone and tablet layouts.
@@ -94,9 +95,13 @@ Visual direction:
 
 ### Shot tracker
 
-The shot tracker is part of this prototype. Add it when the build starts. Do not add it before that, and do not build the debug menu until that menu has been discussed.
+The shot tracker is part of this prototype. It is the `<trackman-radar>` component from the Trackman UI/UX Game Engine docs, kept in `js/vendor/trackman-radar.js`. It connects to a Trackman 4 radar, and the browser must be Chromium-based (not Safari).
 
-It is the shot tracker described in the Trackman UI/UX Game Engine docs (`<trackman-radar>`). In compare, it drives the Trajectory view for the shot in that slot. It does not open a live radar connection. Mock shots drive it. It does not change how compare works, and it does not replace Video, Graph, Dispersion, Data tiles, or Table.
+- Every shot the radar measures is added to the current session. It shows in the shot list and in the Change shot list under "Radar", and its source reads "This session · Shot tracker". The radar does not report which club was used, so these shots have no club.
+- The shot appears once the radar has a carry for it. Later updates to the same shot replace its numbers.
+- Radar values arrive in metres and m/s. The prototype converts them to yards and mph.
+- The shot's numbers feed Data tiles, Table and Dispersion. Its flight feeds Trajectory, including bounce and roll. If the radar gives no usable flight, such as an indoor shot, Trajectory draws the simple curve instead.
+- Mock shots stay in the prototype, so it works with no radar connected. It does not change how compare works, and it does not replace Video or Graph.
 
 ## 8. Success Metrics
 

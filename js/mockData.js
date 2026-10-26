@@ -254,6 +254,125 @@ export function getShot(id) {
   return byId.get(id) || null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Shot tracker: live shots from a Trackman 4 radar                    */
+/* Radar values are metres and m/s. The prototype shows yards and mph. */
+/* ------------------------------------------------------------------ */
+
+const M_TO_YD = 1.0936133;
+const MS_TO_MPH = 2.2369363;
+
+const pendingMeasurements = new Map();
+
+function evalFit(coeffs, t) {
+  let value = 0;
+  for (let i = coeffs.length - 1; i >= 0; i -= 1) value = value * t + coeffs[i];
+  return value;
+}
+
+function sampleSegment(segment, steps) {
+  const [t0, t1] = segment.TimeInterval || segment.ValidTimeInterval || [0, 0];
+  const side = [];
+  const top = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = t0 + ((t1 - t0) * i) / steps;
+    const x = evalFit(segment.XFit || [0], t) * M_TO_YD;
+    const y = Math.max(0, evalFit(segment.YFit || [0], t) * M_TO_YD);
+    const z = evalFit(segment.ZFit || [0], t) * M_TO_YD;
+    side.push([round(x, 1), round(y, 1)]);
+    top.push([round(x, 1), round(z, 1)]);
+  }
+  return { side, top };
+}
+
+/** Real flight and bounce/roll from the radar's polynomial fits. Null when there is no usable flight. */
+function flightFromTracker(segments, carryYd) {
+  if (!Array.isArray(segments)) return null;
+  const flightSegment = segments.find((s) => s.Kind === "Flight" && s.XFit && s.YFit && s.ZFit);
+  if (!flightSegment) return null;
+  const main = sampleSegment(flightSegment, 48);
+  const endX = main.side[main.side.length - 1][0];
+  if (!Number.isFinite(endX) || endX < carryYd * 0.75 || endX > carryYd * 1.25) return null;
+
+  const after = { side: [], top: [] };
+  segments
+    .filter((s) => (s.Kind === "Bounce" || s.Kind === "Roll") && s.XFit && s.YFit && s.ZFit)
+    .forEach((segment) => {
+      const part = sampleSegment(segment, 12);
+      after.side.push(...part.side);
+      after.top.push(...part.top);
+    });
+  return { side: main.side, top: main.top, after, tracked: true };
+}
+
+function pick(value, scale = 1, digits = 1) {
+  return typeof value === "number" && Number.isFinite(value) ? round(value * scale, digits) : null;
+}
+
+function shotFromMeasurement(m, existing) {
+  const carry = pick(m.Carry, M_TO_YD, 0);
+  const height = pick(m.MaxHeight, M_TO_YD, 0) ?? 0;
+  const offline = pick(m.CarrySide, M_TO_YD, 0) ?? 0;
+  const base = existing || {
+    id: `live-${m.Id}`,
+    club: "Radar",
+    label: `Shot ${currentShots.length + 1}`,
+    source: "This session",
+    sessionId: currentSession.id,
+    sessionName: currentSession.name,
+    sessionDate: currentSession.date,
+    tourPlayer: null,
+    live: true,
+  };
+  const shot = {
+    ...base,
+    carry,
+    total: pick(m.Total, M_TO_YD, 0),
+    height,
+    offline,
+    ballSpeed: pick(m.BallSpeed, MS_TO_MPH, 0),
+    launchAngle: pick(m.LaunchAngle),
+    launchDirection: pick(m.LaunchDirection),
+    spinRate: pick(m.SpinRate, 1, 0),
+    spinAxis: pick(m.SpinAxis),
+    landingAngle: m.LandingAngle == null ? null : pick(Math.abs(m.LandingAngle)),
+    clubSpeed: pick(m.ClubSpeed, MS_TO_MPH, 0),
+    attackAngle: pick(m.AttackAngle),
+    clubPath: pick(m.ClubPath),
+    faceAngle: pick(m.FaceAngle),
+    faceToPath: pick(m.FaceToPath),
+    dynamicLoft: pick(m.DynamicLoft),
+    smash: pick(m.SmashFactor, 1, 2),
+  };
+  shot.flight = flightFromTracker(m.BallTrajectory, carry) || flight(carry, height, offline);
+  return shot;
+}
+
+/**
+ * Feed one radar measurement in. Launch-only messages are held back until a
+ * carry arrives, because a shot without a carry cannot be drawn.
+ * Returns the shot when it was created or updated, otherwise null.
+ */
+export function applyMeasurement(payload) {
+  const id = payload && payload.Id;
+  if (!id) return null;
+  const merged = { ...(pendingMeasurements.get(id) || {}), ...payload };
+  pendingMeasurements.set(id, merged);
+  if (typeof merged.Carry !== "number" || merged.Carry <= 0) return null;
+
+  const key = `live-${id}`;
+  const existing = byId.get(key) || null;
+  const shot = shotFromMeasurement(merged, existing);
+  if (existing) {
+    const index = currentShots.indexOf(existing);
+    currentShots[index] = shot;
+  } else {
+    currentShots.push(shot);
+  }
+  byId.set(key, shot);
+  return shot;
+}
+
 export function latestShot() {
   return currentShots[currentShots.length - 1];
 }
@@ -266,7 +385,8 @@ export function shotsInSession(sessionId, club) {
   return allShots.filter((shot) => shot.sessionId === sessionId && shot.club === club);
 }
 
-export const clubOrder = ["Driver", "7-iron", "Pitching wedge"];
+// "Radar" shots come from the shot tracker. The radar does not report which club was used.
+export const clubOrder = ["Radar", "Driver", "7-iron", "Pitching wedge"];
 
 export const views = [
   ["video", "Video"],
@@ -278,6 +398,7 @@ export const views = [
 ];
 
 export function formatMetric(value, digits) {
+  if (value == null) return "–";
   return Number(value).toFixed(digits);
 }
 
