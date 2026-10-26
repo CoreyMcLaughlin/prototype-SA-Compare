@@ -2,47 +2,47 @@
 
 ## 1. Introduction / Overview
 
-Shot Analysis in Trackman Performance Studio lets coaches and players look at a shot. Today's compare mode is too rigid. You cannot freely change how each shot is shown, swap one shot without breaking the pair, or put a session shot next to an older shot or a tour shot.
+Shot Analysis in Trackman Performance Studio lets coaches and players review and analyse shots. Today's compare mode is too rigid. You cannot freely change how each shot is shown, swap one shot without breaking the pair, or show a session shot next to a shot from a historical session or a shot from the tour player library.
 
 This prototype is an updated compare mode only. A coach or player puts two shots side by side, picks a view for each shot on its own, and replaces either shot from the current session, that player's history, or the tour library.
 
-There is no Figma file. The layout should feel like Trackman, and it should not copy today's Shot Analysis screens.
+The layout should feel like Trackman, and it should not copy today's Shot Analysis screens. The Figma file is reference for how someone enters compare: the orange Compare button at the bottom of the shot list. That shell can be visible. Its other controls are not clickable.
 
 ## 2. Goals
 
 - A coach or player can compare two shots from different places: this session, a past session, or the tour library.
 - Each shot can use its own view at the same time (video, graph, trajectory, dispersion, data tiles, or table).
 - Either shot can be swapped for another shot. The other shot, and both view choices, stay as they were.
-- The first screen is already a comparison, so a tester does not have to set it up before they can look.
+- Compare opens with the left slot already filled and the right slot empty, so a tester can look at one shot and add the second.
 
 ## 3. User Stories
 
-1. As a coach, I want a player's shot next to a tour shot so I can show the difference in a lesson.
-2. As a coach, I want video on one shot and numbers on the other so I can talk through the swing while the data stays in view.
-3. As a player, I want to swap one shot for a shot from an earlier session so I can see whether I am closer to that ball flight.
-4. As a player, I want trajectory on one side and dispersion on the other so I can check shape and landing together.
+1. As a coach, I want a player's shot next to a tour library shot so I can show the difference in a lesson.
+2. As a coach, I want video on one shot and any of the other views on the other so I can talk through the swing while supporting data stays in view.
+3. As a player, I want to swap one shot for a shot from an earlier session so I can see track improvements and make comparisons to older shots. 
+4. As a player, I want to be able to mix and match different views from the same shot such as trajectory on one side and dispersion on the other so I can check shape and landing together. 
 5. As a coach, I want to try a new pairing quickly. Replacing one shot must not clear the other shot or reset the views.
 
 ## 4. Functional Requirements
 
-1. The prototype opens already in compare mode for one player and one current session. It does not ask the user to sign in or pick a player.
+1. The prototype opens already in compare mode for one player in the current session. It does not ask the user to sign in or pick a player.
 2. The screen shows exactly two shot slots, side by side (left and right).
-3. On open, the left slot shows one shot from the current session and the right slot shows a different shot from the current session. The two slots start on different views, so mixed views are visible immediately.
+3. On open, the left slot shows the shot that is currently selected, if nothing is selected the latest one, and the right slot shows an empty slot that the user can easily populate.
 4. Each slot shows the club, a short shot label, and a source: This session, History, or Tour. History also shows the session date. Tour also shows the tour player's name.
 5. Each slot has its own view control. The options are Video, Graph, Trajectory, Dispersion, Data tiles, and Table.
 6. Changing the view on one slot does not change the view on the other slot.
 7. Each slot has a Change shot control that opens a shot list for that slot only.
 8. The shot list has three sources:
-   - **This session:** shots in the open session.
-   - **History:** this player's past sessions, with the shots inside each session.
-   - **Tour library:** reference shots from named tour players.
+  - **This session:** shots in the open session.
+  - **History:** this player's past sessions, with the shots inside each session.
+  - **Tour library:** reference shots from named tour players.
 9. Each row in the list shows enough to choose: club, shot label, carry, and ball speed. History rows also show which past session they belong to. Tour rows show the tour player's name.
 10. Choosing a shot replaces only that slot. The other slot stays. Both view choices stay.
-11. A shot that is already in the other slot is shown in the list but cannot be chosen.
+11. The same shot may fill both slots, so a player can mix views of that shot. Choosing it again is allowed.
 12. Closing the list without choosing leaves both slots unchanged.
 13. **Video** shows a mock swing clip for that shot: a frame, play, and pause. A progress bar moves while it plays. No real video file is required.
 14. **Graph** shows a 3D motion analysis (3DMA) view of that shot only: the player and the club in the swing, recognizable as 3DMA at a glance. 3DMA is its own feature. In this prototype it is only a view inside the slot. It does not change compare. There is no shared 3D scene, no overlay of the two swings, and no 3DMA tools (no joint editing, no metric picker, and no separate 3DMA screen). Choosing Graph on one slot does nothing to the other slot.
-15. **Trajectory** shows a side view and a top view of that shot's ball flight, with carry and apex labeled.
+15. **Trajectory** shows a side view and a top view of that shot's ball flight, with carry and apex labeled. When the prototype is built, this view uses the shot tracker. The tracker does not connect to a live radar. Mock shot data drives it.
 16. **Dispersion** shows a target and that shot's landing, with carry and offline. If the shot belongs to a session, other shots with the same club in that same session appear as lighter marks. A tour shot shows only that shot against the target.
 17. **Data tiles** show the ball and club numbers for that shot, with units. The set is: ball speed (mph), launch angle (°), launch direction (°), spin rate (rpm), spin axis (°), carry (yd), total (yd), height (yd), landing angle (°), club speed (mph), attack angle (°), club path (°), face angle (°), face to path (°), dynamic loft (°), smash factor.
 18. **Table** shows the same numbers as Data tiles, in a single list of label and value.
@@ -57,7 +57,8 @@ There is no Figma file. The layout should feel like Trackman, and it should not 
 - Saving a comparison, or sending it to someone.
 - Search, filters, and sorting in the shot list.
 - The 3DMA feature itself. Graph only shows a 3DMA view of the shot in that slot. It does not add 3DMA tools, a separate 3DMA screen, or any compare behavior.
-- Real video files, live Trackman data, or a backend.
+- Real video files, a live radar connection, or a backend. The shot tracker is in the prototype. A live Trackman radar is not.
+- The rest of the Trackman UI/UX Game Engine, beyond the shot tracker.
 - Sign-in, and switching which player is in focus.
 - Phone and tablet layouts.
 - Motion, other than the video progress bar while a mock clip is playing.
@@ -65,7 +66,7 @@ There is no Figma file. The layout should feel like Trackman, and it should not 
 
 ## 6. Design Considerations
 
-No Figma file. The designer asked for a layout abstracted from current Shot Analysis designs.
+The Figma file is reference only. The designer asked for a layout abstracted from current Shot Analysis designs.
 
 - **Authoritative frames:** None.
 - **Figma fidelity:** Not applicable. On-brand Trackman look. Original layout. Do not recreate today's compare screen.
@@ -89,7 +90,13 @@ Visual direction:
 - Mock shots, sessions, and tour library live in `js/mockData.js`.
 - No database, no API, and no sign-in.
 - Serve the prototype over a local static server so ES modules load.
-- Desktop layout only. Build for a wide window (about 1280px and up).
+- Desktop layout only. Build for a wide window (about 1280px and up). It should also work for a non-widescreen setup.
+
+### Shot tracker
+
+The shot tracker is part of this prototype. Add it when the build starts. Do not add it before that, and do not build the debug menu until that menu has been discussed.
+
+It is the shot tracker described in the Trackman UI/UX Game Engine docs (`<trackman-radar>`). In compare, it drives the Trajectory view for the shot in that slot. It does not open a live radar connection. Mock shots drive it. It does not change how compare works, and it does not replace Video, Graph, Dispersion, Data tiles, or Table.
 
 ## 8. Success Metrics
 
@@ -98,9 +105,11 @@ This is a prototype for user testing, not a production release. Success means a 
 - Tell which two shots are on screen, and where each one came from.
 - Switch one slot to a different view and leave the other view as it is.
 - Replace one shot with a shot from this session, then with a shot from history, then with a tour shot. The other shot and both views stay in place.
-- After a tour comparison, describe one difference they can see between the two shots.
+- After a tour library comparison, describe one difference they can see between the two shots.
 
 ## 9. Open Questions
 
-1. Is two slots the right limit for the test, or should compare grow to three or more shots later? This prototype builds two.
-2. When both slots show numbers (Data tiles or Table), should each number also show the difference versus the other shot? This prototype shows each shot's own numbers only.
+1. **Resolved.** Two slots is the use case. Comparing more than two shots at once is out. This prototype builds two.
+2. **Resolved.** Each shot shows its own numbers only. A difference versus the other shot can be added later from a debug menu. Do not build that menu until we have discussed how it works here.
+3. **Resolved.** The same shot can fill both slots so a player can mix views of that shot. 
+
