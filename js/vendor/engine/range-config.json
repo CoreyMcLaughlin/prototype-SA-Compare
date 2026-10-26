@@ -1,0 +1,39 @@
+{
+  "scene": {
+    "glbPath": "js/vendor/engine/course-files/test-grid.glb",
+    "scaleFactor": 1,
+    "background": "#9ec9dc"
+  },
+  "camera": {
+    "fov": 42,
+    "followShot": false,
+    "autoAimAtFlag": false,
+    "behindBallOffset": [0, 28, -70],
+    "defaultPosition": [-70, 28, 18],
+    "defaultTarget": [40, 6, 0]
+  },
+  "tracer": {
+    "color": "#ec691a",
+    "opacity": 0.95,
+    "width": 0.7,
+    "segments": 48,
+    "fadeStart": false,
+    "maxShots": 1,
+    "restoreOnLoad": false
+  },
+  "scenes": {
+    "scene__00__Test_Grid_100x400": { "courseType": "range" }
+  },
+  "ui": {
+    "positionSelector": { "visible": false }
+  },
+  "positions": [
+    {
+      "id": "range-tee",
+      "label": "Range",
+      "origin": [0, 0, 0],
+      "forward": [1, 0, 0],
+      "followShot": false
+    }
+  ]
+}

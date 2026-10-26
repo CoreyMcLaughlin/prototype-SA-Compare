@@ -195,6 +195,7 @@ p {
 .app-shell {
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
 }
 
@@ -224,6 +225,63 @@ p {
   margin-left: auto;
 }
 
+.topbar-leading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  position: relative;
+  z-index: 6;
+}
+
+.topbar .text-button,
+.topbar .button {
+  white-space: nowrap;
+}
+
+.shotlist-anchor {
+  position: relative;
+}
+
+.text-button.is-open,
+.button.is-open {
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+.compare-shotlist {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + var(--space-sm));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: 18rem;
+  max-height: min(70vh, 36rem);
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-dialog);
+}
+
+.compare-shotlist-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--stroke-subtle);
+}
+
+.compare-shotlist-head > span {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.compare-shotlist-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
 .shell-body {
   display: grid;
   grid-template-columns: 18rem 1fr;
@@ -231,11 +289,74 @@ p {
   min-height: 0;
 }
 
+.compare-frame {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.compare-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Side column in Compare: same layer as the header and slots, so they get narrower. */
+.compare-side {
+  --side-width: 18rem;
+  display: flex;
+  flex: 0 0 auto;
+  width: var(--side-width);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.compare-frame.is-sliding .compare-side {
+  animation: compare-side-in 220ms ease;
+}
+
+.compare-side .shotlist {
+  flex: 0 0 var(--side-width);
+  width: var(--side-width);
+  height: auto;
+  align-self: stretch;
+}
+
+.compare-frame.is-sliding .compare-side .shotlist {
+  animation: compare-side-slide 220ms ease;
+}
+
+.compare-side-close {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@keyframes compare-side-in {
+  from { width: 0; }
+  to { width: var(--side-width); }
+}
+
+@keyframes compare-side-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare-frame.is-sliding .compare-side,
+  .compare-frame.is-sliding .compare-side .shotlist {
+    animation: none;
+  }
+}
+
 .compare-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-lg);
   flex: 1;
+  min-height: 0;
   padding: var(--space-lg);
 }
 
@@ -360,7 +481,18 @@ p {
 }
 
 .shell-stage {
-  padding: var(--space-section);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--space-lg);
+}
+
+/* One shot, same slot height rules as Compare. No second slot. */
+.shell-stage > .slot {
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 .stage-inert {
@@ -389,7 +521,8 @@ p {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: calc(100vh - 6.5rem);
+  min-height: 0;
+  height: 100%;
   background: var(--surface-card);
   border: 1px solid var(--stroke-subtle);
   border-radius: var(--radius-card);
@@ -446,10 +579,72 @@ p {
   background: var(--brand);
 }
 
-.slot-view {
+/* Segmented style: one joined control, equal-width options. Switched from the debug panel. */
+:root[data-view-style="segmented"] .slot > .view-switch {
+  flex-wrap: nowrap;
+  margin: 0 var(--space-lg) var(--space-md);
+  padding: var(--space-xs);
+  border-radius: var(--radius-control);
+  background: var(--surface-neutral);
+}
+
+:root[data-view-style="segmented"] .slot > .view-switch .view-button {
   flex: 1;
+  min-height: 2.25rem;
+  padding: 0 var(--space-sm);
+  border-radius: 0.5rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+:root[data-view-style="segmented"] .slot > .view-switch .view-button:hover:not(.is-on) {
+  background: var(--stroke-subtle);
+}
+
+.slot-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* Video, Graph, Trajectory and Dispersion share the slot height so switching views does not jump. */
+.video-view,
+.graph-view,
+.trajectory-view,
+.dispersion-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--space-md);
+  min-height: 0;
+}
+
+.view-stage,
+.video-frame,
+.trajectory-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.view-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-stage > svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+.trajectory-host {
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: #9ec9dc;
 }
 
 .traj-pair {
@@ -507,12 +702,15 @@ p {
 }
 
 .golfer {
-  width: 100%;
-  max-height: 18rem;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
 }
 
 .video-frame {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
   padding: var(--space-lg);
   border-radius: var(--radius-card);
@@ -537,9 +735,9 @@ p {
 
 .video-controls {
   display: flex;
+  flex: none;
   gap: var(--space-md);
   align-items: center;
-  margin-top: var(--space-md);
 }
 
 .video-track {
@@ -556,17 +754,8 @@ p {
   background: var(--brand);
 }
 
-.dispersion-view,
-.graph-view,
-.trajectory-view {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.dispersion-view svg {
-  width: 100%;
-  max-width: 24rem;
-  margin: 0 auto;
+.dispersion-view .view-stage > svg {
+  max-width: 100%;
 }
 
 .disp-target {
@@ -667,6 +856,41 @@ p {
   font-weight: 600;
 }
 
+.picker-session-row,
+.picker-back {
+  display: flex;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.picker-session-row {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  min-height: var(--row-height);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.picker-session-row:hover,
+.picker-back:hover {
+  background: var(--surface-neutral);
+}
+
+.picker-back {
+  align-items: center;
+  min-height: 2.5rem;
+  padding: var(--space-sm) var(--space-lg);
+  color: var(--brand);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
 .text-button {
   padding: 0;
   color: var(--brand);
@@ -747,6 +971,71 @@ p {
   line-height: 1.45;
 }
 
+/* Label row: control name on the left, info icon on the right. The explanation only shows on hover or focus. */
+.dbg-grp {
+  position: relative;
+}
+
+.dl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.dl-row .dl {
+  margin-bottom: 0;
+}
+
+.dbg-info {
+  display: inline-flex;
+  outline: none;
+}
+
+.dbg-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid rgba(243, 246, 241, 0.45);
+  border-radius: 50%;
+  color: rgba(243, 246, 241, 0.7);
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.dbg-info:hover .dbg-info-icon,
+.dbg-info:focus .dbg-info-icon {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.dbg-tip {
+  display: none;
+  position: absolute;
+  top: 1.75rem;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0.5rem;
+  background: #2b2d2b;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
+  color: rgba(243, 246, 241, 0.92);
+  font-size: var(--text-helper);
+  line-height: 1.45;
+}
+
+.dbg-info:hover .dbg-tip,
+.dbg-info:focus .dbg-tip {
+  display: block;
+}
+
 .seg {
   display: flex;
   gap: var(--space-xs);
@@ -791,6 +1080,10 @@ p {
 @media (max-width: 72rem) {
   .shell-body {
     grid-template-columns: 16rem 1fr;
+  }
+
+  .compare-side {
+    --side-width: 16rem;
   }
 
   .compare-body {

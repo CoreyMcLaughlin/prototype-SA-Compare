@@ -65,64 +65,64 @@ function makeShot(partial) {
   return shot;
 }
 
-const currentShots = [
-  makeShot({
-    id: "ew-7i-1", club: "7-iron", label: "Shot 1",
-    carry: 158, total: 166, height: 29, offline: -6,
-    ballSpeed: 118, launchAngle: 17.4, launchDirection: -1.1, spinRate: 6840, spinAxis: -3.2,
-    landingAngle: 48.1, clubSpeed: 84, attackAngle: -3.6, clubPath: -1.4, faceAngle: -2.2,
-    faceToPath: -0.8, dynamicLoft: 22.4, smash: 1.4,
-  }),
-  makeShot({
-    id: "ew-7i-2", club: "7-iron", label: "Shot 2",
-    carry: 167, total: 174, height: 31, offline: 4,
-    ballSpeed: 122, launchAngle: 16.8, launchDirection: 0.8, spinRate: 6520, spinAxis: 2.4,
-    landingAngle: 46.4, clubSpeed: 86, attackAngle: -3.1, clubPath: 1.2, faceAngle: 1.6,
-    faceToPath: 0.4, dynamicLoft: 21.6, smash: 1.42,
-  }),
-  makeShot({
-    id: "ew-7i-3", club: "7-iron", label: "Shot 3",
-    carry: 163, total: 170, height: 30, offline: 1,
-    ballSpeed: 120, launchAngle: 17.1, launchDirection: 0.2, spinRate: 6690, spinAxis: 0.6,
-    landingAngle: 47.2, clubSpeed: 85, attackAngle: -3.4, clubPath: 0.3, faceAngle: 0.4,
-    faceToPath: 0.1, dynamicLoft: 22.1, smash: 1.41,
-  }),
-  makeShot({
-    id: "ew-pw-1", club: "Pitching wedge", label: "Shot 4",
-    carry: 114, total: 119, height: 28, offline: -5,
-    ballSpeed: 96, launchAngle: 24.2, launchDirection: -1.4, spinRate: 8420, spinAxis: -2.8,
-    landingAngle: 52.6, clubSpeed: 74, attackAngle: -4.8, clubPath: -2.1, faceAngle: -2.6,
-    faceToPath: -0.5, dynamicLoft: 32.4, smash: 1.3,
-  }),
-  makeShot({
-    id: "ew-pw-2", club: "Pitching wedge", label: "Shot 5",
-    carry: 121, total: 126, height: 30, offline: 3,
-    ballSpeed: 99, launchAngle: 23.5, launchDirection: 0.7, spinRate: 8110, spinAxis: 1.9,
-    landingAngle: 51.2, clubSpeed: 76, attackAngle: -4.2, clubPath: 1.1, faceAngle: 1.4,
-    faceToPath: 0.3, dynamicLoft: 31.2, smash: 1.3,
-  }),
-  makeShot({
-    id: "ew-dr-1", club: "Driver", label: "Shot 6",
-    carry: 248, total: 267, height: 28, offline: -11,
-    ballSpeed: 152, launchAngle: 12.8, launchDirection: -2.4, spinRate: 2680, spinAxis: -6.1,
-    landingAngle: 34.2, clubSpeed: 102, attackAngle: 2.1, clubPath: -2.8, faceAngle: -3.4,
-    faceToPath: -0.6, dynamicLoft: 14.2, smash: 1.49,
-  }),
-  makeShot({
-    id: "ew-dr-2", club: "Driver", label: "Shot 7",
-    carry: 261, total: 279, height: 32, offline: 7,
-    ballSpeed: 158, launchAngle: 13.6, launchDirection: 1.6, spinRate: 2410, spinAxis: 4.4,
-    landingAngle: 32.8, clubSpeed: 106, attackAngle: 3.2, clubPath: 2.4, faceAngle: 2.9,
-    faceToPath: 0.5, dynamicLoft: 13.4, smash: 1.49,
-  }),
-  makeShot({
-    id: "ew-dr-3", club: "Driver", label: "Shot 8",
-    carry: 268, total: 286, height: 31, offline: 2,
-    ballSpeed: 161, launchAngle: 13.1, launchDirection: 0.4, spinRate: 2320, spinAxis: 1.2,
-    landingAngle: 33.4, clubSpeed: 108, attackAngle: 2.8, clubPath: 0.6, faceAngle: 0.8,
-    faceToPath: 0.2, dynamicLoft: 13.8, smash: 1.49,
-  }),
-];
+const clubProfiles = {
+  Driver: { carry: 252, roll: 18, height: 30, offline: 9, ball: 154, launch: 13.0, spin: 2550, landing: 34, clubSpeed: 104, attack: 2.2, loft: 14.0, smash: 1.48 },
+  "3-wood": { carry: 228, roll: 14, height: 28, offline: 8, ball: 142, launch: 11.4, spin: 3480, landing: 38, clubSpeed: 98, attack: -0.6, loft: 15.5, smash: 1.45 },
+  "5-iron": { carry: 184, roll: 8, height: 31, offline: 7, ball: 128, launch: 14.6, spin: 5280, landing: 44, clubSpeed: 91, attack: -2.2, loft: 18.8, smash: 1.41 },
+  "7-iron": { carry: 162, roll: 7, height: 30, offline: 6, ball: 119, launch: 17.2, spin: 6680, landing: 47, clubSpeed: 85, attack: -3.4, loft: 22.0, smash: 1.4 },
+  "Pitching wedge": { carry: 116, roll: 5, height: 29, offline: 5, ball: 97, launch: 24.0, spin: 8300, landing: 52, clubSpeed: 75, attack: -4.6, loft: 32.0, smash: 1.29 },
+};
+
+function rngFrom(seed) {
+  let n = seed >>> 0;
+  return () => {
+    n = (Math.imul(n, 1664525) + 1013904223) >>> 0;
+    return n / 4294967296;
+  };
+}
+
+function sway(rng, amount, digits = 1) {
+  return round((rng() - 0.5) * 2 * amount, digits);
+}
+
+function shotFromClub(make, prefix, club, number, rng) {
+  const profile = clubProfiles[club];
+  const carry = Math.round(profile.carry + sway(rng, club === "Driver" ? 16 : 9, 1));
+  const offline = round(sway(rng, profile.offline, 1), 0);
+  const ballSpeed = Math.round(profile.ball + sway(rng, 6, 1));
+  return make({
+    id: `${prefix}-${number}`,
+    club,
+    label: `Shot ${number}`,
+    carry,
+    total: carry + Math.round(profile.roll + sway(rng, 3, 1)),
+    height: Math.round(profile.height + sway(rng, 3, 1)),
+    offline,
+    ballSpeed,
+    launchAngle: round(profile.launch + sway(rng, 1.4), 1),
+    launchDirection: round(offline / 6, 1),
+    spinRate: Math.round(profile.spin + sway(rng, 280, 0)),
+    spinAxis: round(offline / 2.4, 1),
+    landingAngle: round(profile.landing + sway(rng, 1.6), 1),
+    clubSpeed: Math.round(profile.clubSpeed + sway(rng, 3, 1)),
+    attackAngle: round(profile.attack + sway(rng, 0.8), 1),
+    clubPath: round(offline / 4, 1),
+    faceAngle: round(offline / 3.4, 1),
+    faceToPath: round(sway(rng, 0.6), 1),
+    dynamicLoft: round(profile.loft + sway(rng, 0.8), 1),
+    smash: round(profile.smash + sway(rng, 0.02), 2),
+  });
+}
+
+function block(club, count) {
+  return Array.from({ length: count }, () => club);
+}
+
+// A range session is hit in club blocks. A course session mixes clubs the way a round does.
+const currentRng = rngFrom(26);
+const currentShots = block("Pitching wedge", 10)
+  .concat(block("7-iron", 16), block("Driver", 16))
+  .map((club, index) => shotFromClub(makeShot, "ew-26", club, index + 1, currentRng));
 
 function historyShot(session, partial) {
   return makeShot({
@@ -134,58 +134,30 @@ function historyShot(session, partial) {
   });
 }
 
+function fillSession(session, clubs) {
+  const make = (partial) => historyShot(session, partial);
+  const rng = rngFrom(session.seed);
+  session.shots = clubs.map((club, index) => shotFromClub(make, session.id, club, index + 1, rng));
+}
+
 export const historySessions = [
-  { id: "range-12-oct", name: "Range", date: "12 Oct 2026", shots: [] },
-  { id: "course-5-oct", name: "Course", date: "5 Oct 2026", shots: [] },
+  { id: "range-12-oct", name: "Range", date: "12 Oct 2026", detail: "Driver and irons", seed: 12, shots: [] },
+  { id: "course-5-oct", name: "Course", date: "5 Oct 2026", detail: "18 holes", seed: 5, shots: [] },
+  { id: "range-21-sep", name: "Range", date: "21 Sep 2026", detail: "Wedges and irons", seed: 21, shots: [] },
 ];
 
-historySessions[0].shots = [
-  historyShot(historySessions[0], {
-    id: "h-dr-1", club: "Driver", label: "Shot 3",
-    carry: 239, total: 258, height: 26, offline: -14,
-    ballSpeed: 147, launchAngle: 11.4, launchDirection: -3.1, spinRate: 2890, spinAxis: -7.4,
-    landingAngle: 36.1, clubSpeed: 100, attackAngle: 0.8, clubPath: -3.6, faceAngle: -4.2,
-    faceToPath: -0.6, dynamicLoft: 15.1, smash: 1.47,
-  }),
-  historyShot(historySessions[0], {
-    id: "h-dr-2", club: "Driver", label: "Shot 6",
-    carry: 252, total: 270, height: 29, offline: 5,
-    ballSpeed: 154, launchAngle: 12.9, launchDirection: 1.2, spinRate: 2540, spinAxis: 3.1,
-    landingAngle: 34.6, clubSpeed: 104, attackAngle: 2.4, clubPath: 1.8, faceAngle: 2.2,
-    faceToPath: 0.4, dynamicLoft: 14.4, smash: 1.48,
-  }),
-  historyShot(historySessions[0], {
-    id: "h-7i-1", club: "7-iron", label: "Shot 9",
-    carry: 154, total: 162, height: 27, offline: -8,
-    ballSpeed: 114, launchAngle: 16.2, launchDirection: -1.8, spinRate: 7120, spinAxis: -4.1,
-    landingAngle: 49.4, clubSpeed: 82, attackAngle: -4.1, clubPath: -2.4, faceAngle: -3.1,
-    faceToPath: -0.7, dynamicLoft: 23.2, smash: 1.39,
-  }),
-];
-
-historySessions[1].shots = [
-  historyShot(historySessions[1], {
-    id: "c-dr-1", club: "Driver", label: "Shot 1",
-    carry: 255, total: 271, height: 30, offline: 9,
-    ballSpeed: 155, launchAngle: 14.2, launchDirection: 2.1, spinRate: 2480, spinAxis: 5.2,
-    landingAngle: 33.1, clubSpeed: 105, attackAngle: 3.4, clubPath: 2.8, faceAngle: 3.5,
-    faceToPath: 0.7, dynamicLoft: 13.6, smash: 1.48,
-  }),
-  historyShot(historySessions[1], {
-    id: "c-7i-1", club: "7-iron", label: "Shot 4",
-    carry: 171, total: 178, height: 32, offline: 2,
-    ballSpeed: 124, launchAngle: 17.8, launchDirection: 0.5, spinRate: 6380, spinAxis: 1.4,
-    landingAngle: 45.8, clubSpeed: 87, attackAngle: -2.8, clubPath: 0.8, faceAngle: 1.1,
-    faceToPath: 0.3, dynamicLoft: 21.2, smash: 1.43,
-  }),
-  historyShot(historySessions[1], {
-    id: "c-pw-1", club: "Pitching wedge", label: "Shot 11",
-    carry: 108, total: 113, height: 26, offline: -2,
-    ballSpeed: 93, launchAngle: 25.1, launchDirection: -0.6, spinRate: 8680, spinAxis: -1.2,
-    landingAngle: 53.4, clubSpeed: 72, attackAngle: -5.1, clubPath: -0.9, faceAngle: -1.1,
-    faceToPath: -0.2, dynamicLoft: 33.1, smash: 1.29,
-  }),
-];
+fillSession(
+  historySessions[0],
+  block("Pitching wedge", 12).concat(block("7-iron", 14), block("Driver", 12)),
+);
+fillSession(
+  historySessions[1],
+  Array.from({ length: 47 }, (_, index) => ["Driver", "5-iron", "7-iron", "Pitching wedge", "3-wood"][index % 5]),
+);
+fillSession(
+  historySessions[2],
+  block("Pitching wedge", 18).concat(block("7-iron", 15)),
+);
 
 function tourShot(partial) {
   return makeShot({
@@ -343,6 +315,17 @@ function shotFromMeasurement(m, existing) {
     faceToPath: pick(m.FaceToPath),
     dynamicLoft: pick(m.DynamicLoft),
     smash: pick(m.SmashFactor, 1, 2),
+    radar: {
+      Carry: m.Carry,
+      MaxHeight: m.MaxHeight,
+      LaunchDirection: m.LaunchDirection,
+      HangTime: m.HangTime,
+      LaunchAngle: m.LaunchAngle,
+      CurveFactor: m.CurveFactor,
+      SpinRate: m.SpinRate,
+      SpinAxis: m.SpinAxis,
+      BallTrajectory: m.BallTrajectory,
+    },
   };
   shot.flight = flightFromTracker(m.BallTrajectory, carry) || flight(carry, height, offline);
   return shot;
@@ -373,6 +356,57 @@ export function applyMeasurement(payload) {
   return shot;
 }
 
+const simulatedShotIds = new Set();
+
+function nextSessionShotNumber() {
+  let max = 0;
+  for (const shot of currentShots) {
+    const match = /^Shot (\d+)$/.exec(shot.label);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max + 1;
+}
+
+/** One Driver for the current session. Numbers vary on every call. No radar data, so the arc is drawn from carry, height, and offline. */
+export function addSimulatedShot() {
+  const number = nextSessionShotNumber();
+  const previous = currentShots[currentShots.length - 1];
+  let shot = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    shot = shotFromClub(makeShot, "sim", "Driver", number, Math.random);
+    const same =
+      previous &&
+      shot.carry === previous.carry &&
+      shot.height === previous.height &&
+      shot.offline === previous.offline;
+    if (!same) break;
+  }
+  if (previous && shot.carry === previous.carry) {
+    const delta = shot.carry < 270 ? 1 : -1;
+    shot.carry += delta;
+    shot.total += delta;
+    shot.flight = flight(shot.carry, shot.height, shot.offline);
+  }
+  currentShots.push(shot);
+  allShots.push(shot);
+  byId.set(shot.id, shot);
+  simulatedShotIds.add(shot.id);
+  return shot;
+}
+
+/** Drops shots added by Take a new shot. The original mock session stays. */
+export function clearSimulatedShots() {
+  if (!simulatedShotIds.size) return;
+  for (let i = currentShots.length - 1; i >= 0; i -= 1) {
+    if (simulatedShotIds.has(currentShots[i].id)) currentShots.splice(i, 1);
+  }
+  for (let i = allShots.length - 1; i >= 0; i -= 1) {
+    if (simulatedShotIds.has(allShots[i].id)) allShots.splice(i, 1);
+  }
+  for (const id of simulatedShotIds) byId.delete(id);
+  simulatedShotIds.clear();
+}
+
 export function latestShot() {
   return currentShots[currentShots.length - 1];
 }
@@ -386,7 +420,7 @@ export function shotsInSession(sessionId, club) {
 }
 
 // "Radar" shots come from the shot tracker. The radar does not report which club was used.
-export const clubOrder = ["Radar", "Driver", "7-iron", "Pitching wedge"];
+export const clubOrder = ["Radar", "Driver", "3-wood", "5-iron", "7-iron", "Pitching wedge"];
 
 export const views = [
   ["video", "Video"],

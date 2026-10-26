@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,12 +11,22 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <main id="app"></main>
+    <div id="engine-park" hidden></div>
     <!-- Shot tracker: connects to a Trackman 4 radar and streams shots into the page. -->
     <trackman-radar></trackman-radar>
     <script src="js/vendor/trackman-radar.js"></script>
+    <script type="module" src="js/vendor/engine/golf-visualiser.js"></script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>
