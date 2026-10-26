@@ -1,4 +1,5 @@
 import {
+  applyMeasurement,
   clubOrder,
   currentSession,
   currentShotsList,
@@ -32,6 +33,7 @@ const state = {
   pickerSlot: null,
   pickerSource: "session",
   showDifference: false,
+  theme: "light",
   debugOpen: false,
   video: freshVideo(),
 };
@@ -88,6 +90,7 @@ function resetAll() {
   state.pickerSlot = null;
   state.pickerSource = "session";
   state.showDifference = false;
+  state.theme = "light";
   state.debugOpen = true;
   state.video = freshVideo();
   render();
@@ -136,7 +139,7 @@ function esc(value) {
 function sourceLine(shot) {
   if (shot.source === "History") return `History · ${shot.sessionDate}`;
   if (shot.source === "Tour") return `Tour · ${shot.tourPlayer}`;
-  return "This session";
+  return shot.live ? "This session · Shot tracker" : "This session";
 }
 
 function groupsFor(shots) {
@@ -146,6 +149,7 @@ function groupsFor(shots) {
 }
 
 function render() {
+  document.documentElement.dataset.theme = state.theme;
   root.innerHTML = state.screen === "shell" ? shellHtml() : compareHtml();
   root.insertAdjacentHTML("beforeend", debugHtml());
   syncVideoTimer();
@@ -318,23 +322,36 @@ function trajectoryBlock(shot) {
 }
 
 function trajectorySvg(shot) {
-  const maxOffline = Math.max(Math.abs(shot.offline), 10);
-  const side = polyline(shot.flight.side, shot.carry, 120, 100 / Math.max(shot.height, 1));
-  const top = polyline(shot.flight.top, shot.carry, 70, -45 / maxOffline);
+  const { flight } = shot;
+  const afterSide = (flight.after && flight.after.side) || [];
+  const afterTop = (flight.after && flight.after.top) || [];
+  const xMax = Math.max(...flight.side.map((p) => p[0]), ...afterSide.map((p) => p[0]), 1);
+  const apex = Math.max(...flight.side.map((p) => p[1]), 1);
+  const maxOffline = Math.max(
+    ...flight.top.map((p) => Math.abs(p[1])),
+    ...afterTop.map((p) => Math.abs(p[1])),
+    10,
+  );
+  const sideLine = polyline(flight.side, xMax, 120, 100 / apex);
+  const topLine = polyline(flight.top, xMax, 70, -45 / maxOffline);
+  const sideAfter = afterSide.length ? polyline(afterSide, xMax, 120, 100 / apex) : "";
+  const topAfter = afterTop.length ? polyline(afterTop, xMax, 70, -45 / maxOffline) : "";
   return `
     <div class="traj-pair">
       <figure>
         <figcaption>Side</figcaption>
         <svg viewBox="0 0 320 140" role="img" aria-label="Side view of the ball flight">
           <line x1="16" y1="120" x2="304" y2="120" class="traj-ground" />
-          <polyline points="${side}" class="traj-line" />
+          ${sideAfter ? `<polyline points="${sideAfter}" class="traj-after" />` : ""}
+          <polyline points="${sideLine}" class="traj-line" />
         </svg>
       </figure>
       <figure>
         <figcaption>Top</figcaption>
         <svg viewBox="0 0 320 140" role="img" aria-label="Top view of the ball flight">
           <line x1="16" y1="70" x2="304" y2="70" class="traj-ground" />
-          <polyline points="${top}" class="traj-line" />
+          ${topAfter ? `<polyline points="${topAfter}" class="traj-after" />` : ""}
+          <polyline points="${topLine}" class="traj-line" />
         </svg>
       </figure>
     </div>
@@ -358,7 +375,9 @@ function dispersionHtml(shot) {
       ? []
       : shotsInSession(shot.sessionId, shot.club).filter((item) => item.id !== shot.id);
   const marks = [...mates.map((item) => ({ ...item, faint: true })), { ...shot, faint: false }];
-  const target = shot.club === "Driver" ? 265 : shot.club === "7-iron" ? 165 : 115;
+  const fixedTargets = { Driver: 265, "7-iron": 165, "Pitching wedge": 115 };
+  const target =
+    fixedTargets[shot.club] || Math.round(marks.reduce((sum, m) => sum + m.carry, 0) / marks.length);
   return `
     <div class="dispersion-view">
       <svg viewBox="0 0 280 280" role="img" aria-label="Dispersion of the shot against the target">
@@ -386,13 +405,14 @@ function numbersHtml(slot, shot, kind) {
   const showDelta = state.showDifference && bothNumeric() && other;
   const rows = metricDefs
     .map(([key, label, unit, digits]) => {
-      const delta = showDelta
+      const comparable = showDelta && shot[key] != null && other[key] != null;
+      const delta = comparable
         ? `<span class="delta">${formatDelta(shot[key] - other[key], digits)}</span>`
         : "";
       if (kind === "tiles") {
         return `<div class="tile"><p class="tile-label">${label}</p><p class="tile-value">${formatMetric(shot[key], digits)}</p><p class="tile-unit">${unit || "&nbsp;"}${delta}</p></div>`;
       }
-      const value = `${formatMetric(shot[key], digits)}${unit ? ` ${unit}` : ""}`;
+      const value = shot[key] == null ? "–" : `${formatMetric(shot[key], digits)}${unit ? ` ${unit}` : ""}`;
       return `<div class="table-row"><span>${label}</span><span class="table-value">${value}${delta}</span></div>`;
     })
     .join("");
@@ -480,6 +500,14 @@ function debugHtml() {
             <div class="dbg-pop">
               <div class="dh">Prototype controls <span class="ver">v0.1</span></div>
               <div class="dbg-grp">
+                <div class="dl">Theme</div>
+                <div class="seg">
+                  <button class="${state.theme === "light" ? "on" : ""}" type="button" data-action="theme" data-theme-value="light">Light</button>
+                  <button class="${state.theme === "dark" ? "on" : ""}" type="button" data-action="theme" data-theme-value="dark">Dark</button>
+                </div>
+                <p class="dbg-cap">Light is the default look. Dark swaps the page, slots, shot list and text to dark greys. The orange stays the same. Nothing else changes, so both slots keep their shots and views.</p>
+              </div>
+              <div class="dbg-grp">
                 <div class="dl">Number comparison</div>
                 <div class="seg">
                   <button class="${own ? "on" : ""}" type="button" data-action="diff" data-diff="off">Own numbers</button>
@@ -535,6 +563,8 @@ root.addEventListener("click", (event) => {
     clip.playing = !clip.playing;
   } else if (action === "debug-toggle") {
     state.debugOpen = !state.debugOpen;
+  } else if (action === "theme") {
+    state.theme = target.dataset.themeValue;
   } else if (action === "diff") {
     state.showDifference = target.dataset.diff === "on";
   } else if (action === "reset") {
@@ -543,5 +573,13 @@ root.addEventListener("click", (event) => {
   }
   render();
 });
+
+/* Shot tracker: every radar shot lands in the current session, under "Radar". */
+const radar = document.querySelector("trackman-radar");
+if (radar) {
+  radar.addEventListener("trackman:measurement", (event) => {
+    if (applyMeasurement(event.detail)) render();
+  });
+}
 
 render();

@@ -16,6 +16,10 @@
   --stroke-subtle: rgba(31, 31, 31, 0.12);
   --overlay: rgba(0, 0, 0, 0.5);
   --brand: #ec691a;
+  --selected-tint: rgba(236, 105, 26, 0.12);
+  --mate-fill: rgba(31, 31, 31, 0.28);
+  --video-bg: #1f1f1f;
+  color-scheme: light;
 
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
@@ -40,6 +44,24 @@
   --row-height: 3rem; /* 48px — table and menu rows */
   --icon-sm: 1rem; /* 16px */
   --icon-md: 1.25rem; /* 20px */
+}
+
+/* Dark theme: switched from the debug panel. Brand orange stays the same. */
+:root[data-theme="dark"] {
+  --surface-page: #121212;
+  --surface-card: #1c1c1c;
+  --surface-neutral: rgba(255, 255, 255, 0.08);
+  --content-primary: #f2f2f2;
+  --content-secondary: #a9a9a9;
+  --content-helper: #8b8b8b;
+  --content-placeholder: #666666;
+  --stroke-subtle: rgba(255, 255, 255, 0.14);
+  --overlay: rgba(0, 0, 0, 0.7);
+  --shadow-dialog: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.5);
+  --selected-tint: rgba(236, 105, 26, 0.22);
+  --mate-fill: rgba(242, 242, 242, 0.32);
+  --video-bg: #0a0a0a;
+  color-scheme: dark;
 }
 
 .page-title,
@@ -181,7 +203,8 @@ p {
   align-items: baseline;
   gap: var(--space-lg);
   min-height: 3.5rem;
-  padding: var(--space-md) var(--space-lg);
+  /* Left padding leaves room for the shot tracker's status dot. */
+  padding: var(--space-md) var(--space-lg) var(--space-md) 3rem;
   background: var(--surface-card);
   border-bottom: 1px solid var(--stroke-subtle);
 }
@@ -297,7 +320,7 @@ p {
 
 .shot-row.is-selected,
 .picker-row.is-selected {
-  background: rgba(236, 105, 26, 0.12);
+  background: var(--selected-tint);
 }
 
 .ball-dot {
@@ -457,6 +480,15 @@ p {
   stroke-linecap: round;
 }
 
+.traj-after {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
 .traj-ground,
 .disp-ring {
   fill: none;
@@ -484,7 +516,7 @@ p {
   gap: var(--space-sm);
   padding: var(--space-lg);
   border-radius: var(--radius-card);
-  background: #1f1f1f;
+  background: var(--video-bg);
 }
 
 .video-frame .video-label {
@@ -546,7 +578,7 @@ p {
 }
 
 .disp-mate {
-  fill: rgba(31, 31, 31, 0.28);
+  fill: var(--mate-fill);
 }
 
 .tile-grid {
