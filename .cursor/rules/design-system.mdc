@@ -1,0 +1,37 @@
+# Trackman Design System (TDS4)
+
+This template does **not** ship a token CSS file. TDS4 is Trackman’s design system: colours, typography, spacing, and components are defined in **Figma and internal design-system sources**, not in this repo.
+
+When styling prototypes:
+
+- Aim for an **on-brand Trackman look**: orange brand accent (`#ec691a`), off-white page background (`#f6f6f6`), cards on white — not generic grey UI or default browser styling.
+- Prefer **semantic CSS** (`--brand`, `--surface-page`, etc.) in your own `css/` files if that keeps things consistent; align names with TDS concepts (surface elevation, content primary/secondary, stroke) when possible.
+- **Do not** paste large vendor token files into the template. If you need the official `--tds-*` variable set, pull it from your team’s current TDS package or design handoff — do not reproduce it here.
+
+## Lightweight prototype defaults
+
+Use the small token set and recipes in `css/styles.css` before inventing new values:
+
+- **Colour:** dark primary content, softer secondary/helper text, subtle translucent strokes, white elevated surfaces, and orange primary actions.
+- **Shape:** controls and cards use `0.75rem` (12px) corners; dialogs use `1.5rem` (24px).
+- **Spacing:** prefer the `0.25 / 0.5 / 0.75 / 1 / 2rem` (4 / 8 / 12 / 16 / 32px) scale. Use `0.5rem` from labels to fields and `2rem` between form sections.
+- **Type:** use Inter for admin UI. Page titles `1.75rem` (28px), section titles `1.125rem` (18px), body copy, inputs and buttons `1rem` (16px), labels, table cells and nav `0.875rem` (14px), helper text and counters `0.75rem` (12px). Reserve Oswald for score, stat, or performance displays.
+- **Density:** inputs, buttons and icon buttons are `2.5rem` (40px); table headers, table rows and menu rows are `3rem` (48px).
+
+## Sizing is rem, not px
+
+Every font size, control height, spacing value, and icon dimension goes in `rem`, driven by the tokens in `css/styles.css`. The reader's browser text-size setting is what the scale multiplies from, so the whole UI scales with it.
+
+- **Never** set a px `font-size` on `html` or `:root`. That locks the scale and breaks the browser preference.
+- **Never** go below `0.75rem` (12px) for any text.
+- Do not read px straight off a Figma export and use it as-is. Figma frames are often exported at a narrower width, which makes body copy look like 9–11px. Map to the token scale above instead.
+- Hairline borders and shadow offsets can stay in px.
+- Sanity check a build by setting the browser font size to 200%: text should roughly double with nothing clipped or overlapping (WCAG 1.4.4).
+
+For common controls, reuse `.button`, `.button--primary`, `.field`, `.field-label`, `.helper-text`, `.dialog-backdrop`, and `.dialog`. These are intentionally approximate TDS recipes, not exact production components. Keep tables clean and dense with subtle row dividers rather than card styling on every row.
+
+For Figma-to-build fidelity, use **Figma inspect + designer agreement** on colours and type; this rule file is only a lightweight reminder, not a token dictionary.
+
+## Where Figma exports go
+
+Save icons, logos, and images you pull out of Figma in `images/` (for example `images/icons/close.svg`). Never save them in `assets/` — that folder is the designer's private local space and does not deploy, so the prototype would show broken images on the live link. Never create a root-level `public/` folder either.

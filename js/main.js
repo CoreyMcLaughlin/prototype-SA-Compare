@@ -2,7 +2,6 @@ import {
   addSimulatedShot,
   applyMeasurement,
   clearSimulatedShots,
-  clubOrder,
   currentSession,
   currentShotsList,
   formatDelta,
@@ -14,16 +13,17 @@ import {
   offlineLabel,
   player,
   shotsInSession,
-  tourShots,
+  tourPlayers,
   views,
 } from "./mockData.js";
 
 const root = document.getElementById("app");
 
+const freshClip = () => ({ playing: false, progress: 0, angle: "fo" });
 const freshVideo = () => ({
-  left: { playing: false, progress: 0 },
-  right: { playing: false, progress: 0 },
-  shell: { playing: false, progress: 0 },
+  left: freshClip(),
+  right: freshClip(),
+  shell: freshClip(),
 });
 
 const state = {
@@ -37,17 +37,27 @@ const state = {
   pickerSlot: null,
   pickerSource: "session",
   historySessionId: null,
+  tourPlayerId: null,
+  tourOpen: { Driver: false, Iron: false },
+  closeStyle: "icon",
   showDifference: false,
   theme: "dark",
   viewStyle: "chips",
   debugOpen: false,
   shotListOpen: false,
   shotListStyle: "panel",
+  hideShotsWithoutVideo: false,
+  shotNavStyle: "left",
+  frameStyle: "session",
+  listMetric: "carry",
   video: freshVideo(),
 };
 
 let videoTimer = null;
 let slideShotList = false;
+let scrollListToShot = false;
+
+const shotListSelector = ".shotlist-scroll, .compare-shotlist-scroll";
 
 function activeShotId() {
   return state.selectedShotId || latestShot().id;
@@ -102,12 +112,19 @@ function resetAll() {
   state.pickerSlot = null;
   state.pickerSource = "session";
   state.historySessionId = null;
+  state.tourPlayerId = null;
+  state.tourOpen = { Driver: false, Iron: false };
+  state.closeStyle = "icon";
   state.showDifference = false;
   state.theme = "dark";
   state.viewStyle = "chips";
   state.debugOpen = true;
   state.shotListOpen = false;
   state.shotListStyle = "panel";
+  state.hideShotsWithoutVideo = false;
+  state.shotNavStyle = "left";
+  state.frameStyle = "session";
+  state.listMetric = "carry";
   state.video = freshVideo();
   render();
 }
@@ -141,6 +158,7 @@ function tickVideo() {
     const button = root.querySelector(`[data-video-toggle="${slot}"]`);
     if (bar) bar.style.width = `${clip.progress * 100}%`;
     if (button) button.textContent = clip.playing ? "Pause" : "Play";
+    applySwing(slot, clip.progress);
   });
   syncVideoTimer();
 }
@@ -156,13 +174,46 @@ function esc(value) {
 function sourceLine(shot) {
   if (shot.source === "History") return `History · ${shot.sessionDate}`;
   if (shot.source === "Tour") return `Tour · ${shot.tourPlayer}`;
-  return shot.live ? "This session · Shot tracker" : "This session";
+  return shot.live ? "Current session · Shot tracker" : "Current session";
 }
 
-function groupsFor(shots) {
-  return clubOrder
-    .map((club) => ({ club, shots: shots.filter((shot) => shot.club === club) }))
-    .filter((group) => group.shots.length);
+/** Latest shot first. The array from the session is oldest first, so this copies it. */
+function newestFirst(shots) {
+  return [...shots].reverse();
+}
+
+/**
+ * The list a compare slot steps through.
+ * Current session and history are hit order, latest at the top.
+ * A tour player's shots stay in the library order: Driver, then Iron.
+ */
+function orderedShotsFor(shot) {
+  if (!shot) return [];
+  if (shot.source === "Tour") {
+    const person = tourPlayers.find((item) => item.shots.some((itemShot) => itemShot.id === shot.id));
+    if (!person) return [shot];
+    return [
+      ...person.shots.filter((item) => item.club === "Driver"),
+      ...person.shots.filter((item) => item.club !== "Driver"),
+    ];
+  }
+  if (shot.source === "History") {
+    const session = historySessions.find((item) => item.id === shot.sessionId);
+    return session ? newestFirst(session.shots) : [shot];
+  }
+  const visible = newestFirst(visibleSessionShots());
+  if (visible.some((item) => item.id === shot.id)) return visible;
+  const visibleIds = new Set(visible.map((item) => item.id));
+  return newestFirst(currentShotsList()).filter((item) => item.id === shot.id || visibleIds.has(item.id));
+}
+
+function stepEnds(shot) {
+  const list = orderedShotsFor(shot);
+  const index = list.findIndex((item) => item.id === shot.id);
+  return {
+    atTop: index <= 0,
+    atBottom: index < 0 || index >= list.length - 1,
+  };
 }
 
 const YD_TO_M = 1 / 1.0936133;
@@ -248,45 +299,124 @@ function mountVisualisers() {
 }
 
 function render() {
+  const page = document.scrollingElement;
+  const pageTop = page ? page.scrollTop : 0;
+  const pageLeft = page ? page.scrollLeft : 0;
+  const listTops = [...root.querySelectorAll(shotListSelector)].map((el) => el.scrollTop);
+  const revealShot = scrollListToShot;
+  scrollListToShot = false;
+
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.viewStyle = state.viewStyle;
+  document.documentElement.dataset.frame = frameOn() ? "on" : "off";
   const slide = slideShotList;
   slideShotList = false;
   parkVisualisers();
-  root.innerHTML = state.screen === "shell" ? shellHtml() : compareHtml(slide);
+  const screen = state.screen === "shell" ? shellHtml() : compareHtml(slide);
+  root.innerHTML = withFrame(screen);
   root.insertAdjacentHTML("beforeend", debugHtml());
   mountVisualisers();
   syncVideoTimer();
-  root.querySelector(".shot-row.is-selected")?.scrollIntoView({ block: "nearest" });
+
+  if (page) {
+    page.scrollTop = pageTop;
+    page.scrollLeft = pageLeft;
+  }
+  root.querySelectorAll(shotListSelector).forEach((el, index) => {
+    if (listTops[index] != null) el.scrollTop = listTops[index];
+  });
+  if (revealShot) revealSelectedShot();
 }
 
-function sessionShotGroupsHtml() {
-  const selectedId = activeShotId();
-  return groupsFor(currentShotsList())
-    .map(
-      (group) => `
-        <div class="club-group">
-          <div class="club-group-label">
-            <span>${esc(group.club)}</span>
-            <span class="inert-meta">${group.shots.length}</span>
-          </div>
-          ${group.shots
-            .map((shot) => {
-              const on = shot.id === selectedId ? " is-selected" : "";
-              return `
-                <button class="shot-row${on}" type="button" data-action="select" data-shot="${shot.id}">
-                  <span class="ball-dot"></span>
-                  <span>${esc(shot.label)}</span>
-                  <span class="shot-carry">${shot.carry}</span>
-                  <span class="inert-icon" aria-hidden="true">&#9654;</span>
-                </button>
-              `;
-            })
-            .join("")}
-        </div>
-      `,
-    )
+function revealSelectedShot() {
+  const row = root.querySelector(".shot-row.is-selected");
+  if (!row) return;
+  const scroller = row.closest(shotListSelector);
+  if (!scroller) return;
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const slack = 1;
+  const visible =
+    Math.min(rowRect.bottom, scrollerRect.bottom) - Math.max(rowRect.top, scrollerRect.top);
+  if (visible > slack) return;
+
+  const sticky = scroller.querySelector(".shotlist-metric");
+  const stickyHeight = sticky ? sticky.getBoundingClientRect().height : 0;
+  if (rowRect.bottom <= scrollerRect.top + slack) {
+    scroller.scrollTop -= scrollerRect.top + stickyHeight - rowRect.top;
+  } else if (rowRect.top >= scrollerRect.bottom - slack) {
+    scroller.scrollTop += rowRect.bottom - scrollerRect.bottom;
+  }
+}
+
+function videoMark() {
+  return `<svg class="video-mark" viewBox="0 0 16 16" role="img" aria-label="Video recorded"><rect x="1.5" y="4" width="9" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 6.8 L14.2 5 V11 L10.5 9.2 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function noVideoHtml() {
+  return `<div class="view-stage"><p class="no-video">No video was recorded for this shot.</p></div>`;
+}
+
+function visibleSessionShots() {
+  const shots = currentShotsList();
+  if (state.screen === "compare" && state.hideShotsWithoutVideo) {
+    return shots.filter((shot) => shot.hasVideo);
+  }
+  return shots;
+}
+
+function listMetricHtml() {
+  const options = metricDefs
+    .map(([key, label]) => `<option value="${key}"${key === state.listMetric ? " selected" : ""}>${esc(label)}</option>`)
     .join("");
+  return `<div class="shotlist-metric"><label class="helper-text" for="shotlist-metric">Show</label><select id="shotlist-metric" class="shotlist-metric-select" aria-label="Value shown in the shot list">${options}</select></div>`;
+}
+
+function listValue(shot) {
+  const def = metricDefs.find(([key]) => key === state.listMetric) || ["carry", "Carry", "yd", 0];
+  const [key, , unit, digits] = def;
+  const text = formatMetric(shot[key], digits);
+  if (text === "–" || !unit) return text;
+  return `${text} ${unit}`;
+}
+
+function clubMark(club) {
+  const slug = String(club).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return `<span class="ball-dot" data-club="${esc(slug)}" title="${esc(club)}"></span>`;
+}
+
+function sessionShotRowsHtml() {
+  const selectedId = activeShotId();
+  return newestFirst(visibleSessionShots())
+    .map((shot) => {
+      const on = shot.id === selectedId ? " is-selected" : "";
+      return `
+        <button class="shot-row${on}" type="button" data-action="select" data-shot="${shot.id}">
+          ${clubMark(shot.club)}
+          <span>${esc(shot.label)}</span>
+          <span class="shot-figures">${shot.hasVideo ? videoMark() : ""}<span class="shot-carry">${listValue(shot)}</span></span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+/** Hides in compare is the default. Always on keeps the window in both screens. */
+function frameOn() {
+  if (state.frameStyle === "always") return true;
+  return state.screen !== "compare";
+}
+
+function withFrame(inner) {
+  if (!frameOn()) return inner;
+  return `
+    <div class="product-frame">
+      <div class="product-frame-bar product-frame-bar--top" aria-hidden="true"></div>
+      <div class="product-frame-body">${inner}</div>
+      <div class="product-frame-bar product-frame-bar--bottom" aria-hidden="true"></div>
+    </div>
+  `;
 }
 
 function shellHtml() {
@@ -308,7 +438,8 @@ function shellHtml() {
             </span>
           </div>
           <div class="shotlist-scroll">
-            ${sessionShotGroupsHtml()}
+            ${listMetricHtml()}
+            ${sessionShotRowsHtml()}
           </div>
           <div class="shotlist-bottom">
             <button class="button button--primary compare-launch" type="button" data-action="compare">Compare</button>
@@ -338,13 +469,14 @@ function compareShotListHtml() {
     <div class="compare-shotlist" id="compare-shot-list" role="region" aria-label="Shot list">
       <div class="compare-shotlist-head">
         <span>
-          <span class="shotlist-name">This session</span>
+          <span class="shotlist-name">Current session</span>
           <span class="helper-text">${currentShotsList().length} shots · ${esc(currentSession.detail)}</span>
         </span>
-        <button class="text-button" type="button" data-action="close-shot-list">Close</button>
+        ${closeControl("close-shot-list")}
       </div>
       <div class="compare-shotlist-scroll">
-        ${sessionShotGroupsHtml()}
+        ${listMetricHtml()}
+        ${sessionShotRowsHtml()}
       </div>
     </div>
   `;
@@ -360,10 +492,11 @@ function compareSideListHtml() {
             <span class="shotlist-name">${esc(player.name)}</span>
             <span class="helper-text">${currentShotsList().length} shots · ${esc(currentSession.detail)}</span>
           </span>
-          <button class="text-button compare-side-close" type="button" data-action="close-shot-list">Close</button>
+          ${closeControl("close-shot-list", "compare-side-close")}
         </div>
         <div class="shotlist-scroll">
-          ${sessionShotGroupsHtml()}
+          ${listMetricHtml()}
+          ${sessionShotRowsHtml()}
         </div>
         <div class="shotlist-bottom">
           <input class="field" disabled placeholder="Search shots" aria-label="Search shots" />
@@ -424,9 +557,8 @@ function slotHtml(slot) {
     return `
       <section class="slot slot-empty">
         <div class="empty-copy">
-          <h2 class="section-title">Add a shot</h2>
           <p class="helper-text">Choose a shot from this session, a historical session, or the tour player library.</p>
-          <button class="button button--primary" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>
+          <button class="button button--primary" type="button" data-action="open-picker" data-slot="${slot}">Add shot</button>
         </div>
         ${picker}
       </section>
@@ -434,6 +566,13 @@ function slotHtml(slot) {
   }
 
   const view = slotView(slot);
+  const { atTop, atBottom } = stepEnds(shot);
+  const prev = `<button class="button" type="button" data-action="step" data-slot="${slot}" data-dir="prev" aria-label="Previous shot"${atTop ? " disabled" : ""}>${chevron("left")}</button>`;
+  const next = `<button class="button" type="button" data-action="step" data-slot="${slot}" data-dir="next" aria-label="Next shot"${atBottom ? " disabled" : ""}>${chevron("right")}</button>`;
+  const change = `<button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>`;
+  const arrows = state.shotNavStyle === "split"
+    ? `${prev}${change}${next}`
+    : `<span class="slot-step">${prev}${next}</span>${change}`;
   return `
     <section class="slot">
       <header class="slot-head">
@@ -441,7 +580,9 @@ function slotHtml(slot) {
           <h2 class="slot-club">${esc(shot.club)} · ${esc(shot.label)}</h2>
           <p class="helper-text">${esc(sourceLine(shot))}</p>
         </div>
-        <button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>
+        <div class="slot-shot-nav${state.shotNavStyle === "split" ? "" : " is-left"}">
+          ${arrows}
+        </div>
       </header>
       ${viewSwitchHtml(slot, shot.label, view)}
       <div class="slot-view">${viewHtml(slot, shot, view)}</div>
@@ -460,14 +601,21 @@ function viewHtml(slot, shot, view) {
 }
 
 function videoHtml(slot, shot) {
+  if (!shot.hasVideo) return `<div class="video-view">${noVideoHtml()}</div>`;
   const clip = state.video[slot];
+  const angle = clip.angle === "dl" ? "dl" : "fo";
+  const angleName = angle === "dl" ? "DL" : "FO";
   return `
     <div class="video-view">
       <div class="video-frame">
-        <p class="video-label">Face-on · ${esc(shot.club)}</p>
-        ${golferSvg(shot)}
+        <p class="video-label">${angleName} · ${esc(shot.club)}</p>
+        ${videoScene(slot, shot, angle, clip.progress)}
       </div>
       <div class="video-controls">
+        <div class="video-angle" role="group" aria-label="Camera angle">
+          <button type="button" data-action="video-angle" data-slot="${slot}" data-angle="fo" aria-label="Front on" aria-pressed="${angle === "fo" ? "true" : "false"}"${angle === "fo" ? " class=\"on\"" : ""}>FO</button>
+          <button type="button" data-action="video-angle" data-slot="${slot}" data-angle="dl" aria-label="Down the line" aria-pressed="${angle === "dl" ? "true" : "false"}"${angle === "dl" ? " class=\"on\"" : ""}>DL</button>
+        </div>
         <button class="button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}">${clip.playing ? "Pause" : "Play"}</button>
         <div class="video-track"><span data-video-bar="${slot}" style="width:${clip.progress * 100}%"></span></div>
       </div>
@@ -476,6 +624,7 @@ function videoHtml(slot, shot) {
 }
 
 function graphHtml(shot) {
+  if (!shot.hasVideo) return `<div class="graph-view">${noVideoHtml()}</div>`;
   return `
     <div class="graph-view">
       <p class="helper-text">3D motion</p>
@@ -596,6 +745,138 @@ function numbersHtml(slot, shot, kind) {
     : `<div class="data-table">${rows}</div>`;
 }
 
+const EMMA_KIT = { shirt: "#1b4f72", trousers: "#243040", cap: "#14384f" };
+const TOUR_KITS = [
+  { shirt: "#b5523a", trousers: "#2a2422", cap: "#8a3b28" },
+  { shirt: "#2f7d57", trousers: "#1e2822", cap: "#1f5a3e" },
+  { shirt: "#3e6cb5", trousers: "#22262e", cap: "#2c4e86" },
+  { shirt: "#c4893a", trousers: "#2a261e", cap: "#8f6424" },
+  { shirt: "#7a4b8a", trousers: "#261e2a", cap: "#583468" },
+  { shirt: "#2a8f8a", trousers: "#1c2626", cap: "#1c6662" },
+  { shirt: "#a33d55", trousers: "#2a1e22", cap: "#7a2c3e" },
+  { shirt: "#5c6b32", trousers: "#22241c", cap: "#414c22" },
+];
+
+/** Emma keeps one kit. Each tour player keeps one kit, chosen from their name. */
+function kitFor(shot) {
+  if (shot.source !== "Tour") return EMMA_KIT;
+  const name = shot.tourPlayer || "Tour";
+  let n = 0;
+  for (let i = 0; i < name.length; i += 1) n = (Math.imul(n, 33) + name.charCodeAt(i)) >>> 0;
+  return TOUR_KITS[n % TOUR_KITS.length];
+}
+
+function swingPose(progress) {
+  const p = Math.max(0, Math.min(1, Number(progress) || 0));
+  const back = Math.sin((Math.min(p, 0.42) / 0.42) * Math.PI);
+  const through = p > 0.42 ? (p - 0.42) / 0.58 : 0;
+  return {
+    arm: -back * 82 + through * 110,
+    torso: -back * 14 + through * 20,
+  };
+}
+
+function applySwing(slot, progress) {
+  const pose = swingPose(progress);
+  const torso = root.querySelector(`[data-swing-torso="${slot}"]`);
+  const arm = root.querySelector(`[data-swing-arm="${slot}"]`);
+  if (torso) {
+    const sign = Number(torso.dataset.swingSign) || 1;
+    const [x, y] = (torso.dataset.swingPivot || "0 0").split(" ");
+    torso.setAttribute("transform", `rotate(${(pose.torso * sign).toFixed(1)} ${x} ${y})`);
+  }
+  if (arm) {
+    const sign = Number(arm.dataset.swingSign) || 1;
+    const [x, y] = (arm.dataset.swingPivot || "0 0").split(" ");
+    arm.setAttribute("transform", `rotate(${(pose.arm * sign).toFixed(1)} ${x} ${y})`);
+  }
+}
+
+function videoScene(slot, shot, angle, progress) {
+  const kit = kitFor(shot);
+  const pose = swingPose(progress);
+  const sign = angle === "dl" ? -1 : 1;
+  const bay = angle === "dl" ? bayDownTheLine(slot, kit, pose, sign) : bayFrontOn(slot, kit, pose, sign);
+  const label = angle === "dl" ? "Down the line" : "Front on";
+  return `<svg class="video-scene" viewBox="0 0 640 400" role="img" aria-label="${label} indoor range">${bay}</svg>`;
+}
+
+function bayFrontOn(slot, kit, pose, sign) {
+  const torso = (pose.torso * sign).toFixed(1);
+  const arm = (pose.arm * sign).toFixed(1);
+  return `
+    <rect width="640" height="400" fill="#14161c"/>
+    <rect x="0" y="0" width="70" height="250" fill="#101218"/>
+    <rect x="570" y="0" width="70" height="250" fill="#101218"/>
+    <rect x="70" y="0" width="500" height="36" fill="#1c1f28"/>
+    <rect x="120" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
+    <rect x="275" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
+    <rect x="430" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
+    <rect x="110" y="48" width="420" height="168" rx="6" fill="#243044"/>
+    <circle cx="320" cy="132" r="46" fill="none" stroke="#3d5168" stroke-width="2"/>
+    <circle cx="320" cy="132" r="22" fill="none" stroke="#3d5168" stroke-width="2"/>
+    <circle cx="320" cy="132" r="4" fill="#6d849c"/>
+    <polygon points="0,230 640,230 640,400 0,400" fill="#2a2c31"/>
+    <rect x="210" y="248" width="220" height="152" rx="8" fill="#1b3a30"/>
+    <g class="bay-player" transform="translate(318 300)">
+      <ellipse cx="4" cy="36" rx="46" ry="10" fill="#000" opacity="0.35"/>
+      <rect x="-22" y="0" width="16" height="48" rx="6" fill="${kit.trousers}"/>
+      <rect x="8" y="0" width="16" height="48" rx="6" fill="${kit.trousers}"/>
+      <rect x="-24" y="40" width="20" height="8" rx="2" fill="#161616"/>
+      <rect x="6" y="40" width="20" height="8" rx="2" fill="#161616"/>
+      <g data-swing-torso="${slot}" data-swing-sign="${sign}" data-swing-pivot="0 -20" transform="rotate(${torso} 0 -20)">
+        <rect x="-26" y="-78" width="52" height="64" rx="12" fill="${kit.shirt}"/>
+        <rect x="-26" y="-78" width="18" height="64" rx="12" fill="#000" opacity="0.16"/>
+        <circle cx="0" cy="-98" r="16" fill="#e8c4a8"/>
+        <path d="M-17 -104 Q0 -124 17 -104 L15 -94 Q0 -108 -15 -94 Z" fill="${kit.cap}"/>
+        <g data-swing-arm="${slot}" data-swing-sign="${sign}" data-swing-pivot="-8 -58" transform="rotate(${arm} -8 -58)">
+          <rect x="-14" y="-64" width="12" height="34" rx="6" fill="${kit.shirt}"/>
+          <line x1="-8" y1="-32" x2="-36" y2="10" stroke="#d5d8de" stroke-width="3" stroke-linecap="round"/>
+          <rect x="-48" y="6" width="18" height="7" rx="1" fill="#f2f2f2" transform="rotate(-28 -39 10)"/>
+        </g>
+      </g>
+      <circle cx="-24" cy="22" r="4.5" fill="#f7f7f7"/>
+    </g>
+  `;
+}
+
+function bayDownTheLine(slot, kit, pose, sign) {
+  const torso = (pose.torso * sign).toFixed(1);
+  const arm = (pose.arm * sign).toFixed(1);
+  return `
+    <rect width="640" height="400" fill="#14161c"/>
+    <polygon points="70,400 570,400 430,150 210,150" fill="#23262c"/>
+    <polygon points="248,400 392,400 356,214 284,214" fill="#1b3a30"/>
+    <line x1="320" y1="392" x2="320" y2="186" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+    <polygon points="210,150 430,150 470,36 170,36" fill="#101218"/>
+    <rect x="236" y="52" width="168" height="98" rx="4" fill="#243044"/>
+    <circle cx="320" cy="102" r="28" fill="none" stroke="#3d5168" stroke-width="2"/>
+    <circle cx="320" cy="102" r="12" fill="none" stroke="#3d5168" stroke-width="2"/>
+    <circle cx="320" cy="102" r="3" fill="#6d849c"/>
+    <rect x="150" y="0" width="340" height="22" fill="#1c1f28"/>
+    <rect x="250" y="4" width="140" height="7" rx="2" fill="#f2efe4" opacity="0.8"/>
+    <g class="bay-player" transform="translate(320 292)">
+      <ellipse cx="0" cy="48" rx="54" ry="12" fill="#000" opacity="0.35"/>
+      <rect x="-18" y="8" width="14" height="52" rx="6" fill="${kit.trousers}"/>
+      <rect x="6" y="8" width="14" height="52" rx="6" fill="${kit.trousers}"/>
+      <rect x="-20" y="52" width="18" height="8" rx="2" fill="#161616"/>
+      <rect x="4" y="52" width="18" height="8" rx="2" fill="#161616"/>
+      <g data-swing-torso="${slot}" data-swing-sign="${sign}" data-swing-pivot="0 -8" transform="rotate(${torso} 0 -8)">
+        <rect x="-28" y="-70" width="56" height="78" rx="14" fill="${kit.shirt}"/>
+        <rect x="6" y="-70" width="22" height="78" rx="12" fill="#000" opacity="0.14"/>
+        <circle cx="0" cy="-92" r="18" fill="#e8c4a8"/>
+        <path d="M-18 -98 Q0 -120 18 -98 L18 -88 Q0 -102 -18 -88 Z" fill="${kit.cap}"/>
+        <g data-swing-arm="${slot}" data-swing-sign="${sign}" data-swing-pivot="4 -28" transform="rotate(${arm} 4 -28)">
+          <rect x="-2" y="-40" width="14" height="26" rx="6" fill="${kit.shirt}"/>
+          <line x1="6" y1="-16" x2="28" y2="24" stroke="#d5d8de" stroke-width="3" stroke-linecap="round"/>
+          <rect x="22" y="20" width="16" height="6" rx="1" fill="#f2f2f2" transform="rotate(18 30 23)"/>
+        </g>
+      </g>
+      <circle cx="34" cy="28" r="4" fill="#f7f7f7"/>
+    </g>
+  `;
+}
+
 function golferSvg(shot) {
   const tilt = Math.max(-18, Math.min(18, shot.attackAngle * 3));
   return `
@@ -613,9 +894,26 @@ function golferSvg(shot) {
   `;
 }
 
+function chevron(direction) {
+  const turn = { right: 0, down: 90, left: 180 }[direction];
+  return `<svg class="chevron" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(${turn}deg)"><path d="M6 3.5 L10.5 8 L6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function closeControl(action, extraClass = "") {
+  const icon = `<svg class="icon-x" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  const word = state.closeStyle === "icon" ? "" : "<span>Close</span>";
+  const mark = state.closeStyle === "word" ? "" : icon;
+  return `<button class="close-control close-control--${state.closeStyle} ${extraClass}" type="button" data-action="${action}" aria-label="Close">${mark}${word}</button>`;
+}
+
+function clearTour() {
+  state.tourPlayerId = null;
+  state.tourOpen = { Driver: false, Iron: false };
+}
+
 function pickerHtml(slot) {
   const currentId = slot === "left" ? state.leftShotId : state.rightShotId;
-  const labels = { session: "This session", history: "History", tour: "Tour library" };
+  const labels = { session: "Current session", history: "History", tour: "Tour library" };
   return `
     <div class="picker">
       <div class="picker-head">
@@ -627,48 +925,83 @@ function pickerHtml(slot) {
             })
             .join("")}
         </div>
-        <button class="text-button picker-close" type="button" data-action="close-picker">Close</button>
+        ${closeControl("close-picker", "picker-close")}
       </div>
       <div class="picker-list">${pickerRows(currentId)}</div>
     </div>
   `;
 }
 
-function groupedShotRows(shots, currentId) {
-  return groupsFor(shots)
-    .map(
-      (group) => `
-        <p class="picker-session">${esc(group.club)} · ${group.shots.length}</p>
-        ${group.shots.map((shot) => shotRow(shot, currentId, "")).join("")}
-      `,
-    )
+function orderedShotRows(shots, currentId) {
+  return newestFirst(shots)
+    .map((shot) => shotRow(shot, currentId, ""))
     .join("");
 }
 
 function pickerRows(currentId) {
   if (state.pickerSource === "session") {
-    return groupedShotRows(currentShotsList(), currentId);
+    return orderedShotRows(visibleSessionShots(), currentId);
   }
-  if (state.pickerSource === "tour") {
-    return tourShots.map((shot) => shotRow(shot, currentId, shot.tourPlayer)).join("");
-  }
+  if (state.pickerSource === "tour") return tourRows(currentId);
   const session = historySessions.find((item) => item.id === state.historySessionId);
   if (!session) {
     return historySessions
       .map(
         (item) => `
           <button class="picker-session-row" type="button" data-action="history-session" data-session="${item.id}">
-            <span>${esc(item.name)}</span>
-            <span class="helper-text">${esc(item.date)} · ${item.shots.length} shots · ${esc(item.detail)}</span>
+            <span class="picker-session-copy">
+              <span>${esc(item.name)}</span>
+              <span class="helper-text">${esc(item.date)} · ${item.shots.length} shots · ${esc(item.detail)}</span>
+            </span>
+            ${chevron("right")}
           </button>
         `,
       )
       .join("");
   }
   return `
-    <button class="picker-back" type="button" data-action="history-back">All sessions</button>
+    <button class="picker-back" type="button" data-action="history-back">${chevron("left")}<span>All sessions</span></button>
     <p class="picker-session">${esc(session.name)} · ${esc(session.date)} · ${session.shots.length} shots</p>
-    ${groupedShotRows(session.shots, currentId)}
+    ${orderedShotRows(session.shots, currentId)}
+  `;
+}
+
+function tourRows(currentId) {
+  const person = tourPlayers.find((item) => item.id === state.tourPlayerId);
+  if (!person) {
+    return tourPlayers
+      .map(
+        (item) => `
+          <button class="picker-session-row" type="button" data-action="tour-player" data-player="${item.id}">
+            <span class="picker-session-copy">
+              <span>${esc(item.name)}</span>
+              <span class="helper-text">${item.shots.length} ${item.shots.length === 1 ? "shot" : "shots"}</span>
+            </span>
+            ${chevron("right")}
+          </button>
+        `,
+      )
+      .join("");
+  }
+  const groups = [
+    ["Driver", person.shots.filter((shot) => shot.club === "Driver")],
+    ["Iron", person.shots.filter((shot) => shot.club !== "Driver")],
+  ].filter(([, shots]) => shots.length);
+  return `
+    <button class="picker-back" type="button" data-action="tour-back">${chevron("left")}<span>All players</span></button>
+    <p class="picker-session">${esc(person.name)} · ${person.shots.length} ${person.shots.length === 1 ? "shot" : "shots"}</p>
+    ${groups
+      .map(([club, shots]) => {
+        const open = state.tourOpen[club];
+        return `
+          <button class="tour-club" type="button" data-action="tour-club" data-club="${club}" aria-expanded="${open ? "true" : "false"}">
+            <span>${club} · ${shots.length}</span>
+            ${chevron(open ? "down" : "right")}
+          </button>
+          ${open ? shots.map((shot) => shotRow(shot, currentId, "")).join("") : ""}
+        `;
+      })
+      .join("")}
   `;
 }
 
@@ -677,8 +1010,11 @@ function shotRow(shot, currentId, extra) {
   const detail = extra ? `${extra} · ` : "";
   return `
     <button class="picker-row${on}" type="button" data-action="choose" data-shot="${shot.id}">
-      <span>${esc(shot.club)} · ${esc(shot.label)}</span>
-      <span class="helper-text">${esc(detail)}${shot.carry} yd carry · ${shot.ballSpeed} mph</span>
+      ${clubMark(shot.club)}
+      <span class="picker-row-copy">
+        <span>${esc(shot.club)} · ${esc(shot.label)}</span>
+        <span class="helper-text">${esc(detail)}${shot.carry} yd carry · ${shot.ballSpeed} mph</span>
+      </span>
     </button>
   `;
 }
@@ -736,6 +1072,35 @@ function debugHtml() {
                 </div>
               </div>
               <div class="dbg-grp">
+                ${dbgLabel("Studio frame", "Hides in compare shows the Performance Studio window on the main screen and removes it in Compare, so Compare can use the full window. Always on keeps that window around both screens, so Compare has less height. Nothing in the window can be clicked.")}
+                <div class="seg">
+                  <button class="${state.frameStyle === "session" ? "on" : ""}" type="button" data-action="frame-style" data-frame-style="session">Hides in compare</button>
+                  <button class="${state.frameStyle === "always" ? "on" : ""}" type="button" data-action="frame-style" data-frame-style="always">Always on</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Shot arrows", "Left puts both arrows on the left of Change shot. Either side puts one arrow on each side. Both still move to the shot above or below.")}
+                <div class="seg">
+                  <button class="${state.shotNavStyle === "left" ? "on" : ""}" type="button" data-action="shot-nav" data-nav-style="left">Left</button>
+                  <button class="${state.shotNavStyle === "split" ? "on" : ""}" type="button" data-action="shot-nav" data-nav-style="split">Either side</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Close control", "Icon only shows an X. Icon and word shows the X and the word Close. Word only shows Close. Closing still does the same thing.")}
+                <div class="seg">
+                  <button class="${state.closeStyle === "icon" ? "on" : ""}" type="button" data-action="close-style" data-close-style="icon">Icon</button>
+                  <button class="${state.closeStyle === "both" ? "on" : ""}" type="button" data-action="close-style" data-close-style="both">Icon and word</button>
+                  <button class="${state.closeStyle === "word" ? "on" : ""}" type="button" data-action="close-style" data-close-style="word">Word</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Shots without video", "Show all keeps every session shot in the lists. Hide in compare removes session shots that have no video from the Compare shot list and from Change shot, Current session. The main screen still shows them. History and the tour library stay. A shot already in a slot stays there.")}
+                <div class="seg">
+                  <button class="${state.hideShotsWithoutVideo ? "" : "on"}" type="button" data-action="hide-video" data-hide-video="off">Show all</button>
+                  <button class="${state.hideShotsWithoutVideo ? "on" : ""}" type="button" data-action="hide-video" data-hide-video="on">Hide in compare</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
                 ${dbgLabel("Take a new shot", "This adds one simulated shot to the current session and selects it outside Compare. It does not replace a shot already in a Compare slot.")}
                 <button class="dbg-btn" type="button" data-action="new-shot">Take a new shot</button>
               </div>
@@ -760,6 +1125,7 @@ root.addEventListener("click", (event) => {
       state.video.shell.progress = 0;
     }
     state.selectedShotId = nextId;
+    scrollListToShot = true;
   } else if (action === "compare") {
     openCompare();
     return;
@@ -788,25 +1154,51 @@ root.addEventListener("click", (event) => {
       state.video[slot].playing = false;
       state.video[slot].progress = 0;
     }
+  } else if (action === "step") {
+    const slot = target.dataset.slot;
+    const shot = slot === "left" || slot === "right" ? slotShot(slot) : null;
+    const list = shot ? orderedShotsFor(shot) : [];
+    const index = shot ? list.findIndex((item) => item.id === shot.id) : -1;
+    const next = list[index + (target.dataset.dir === "prev" ? -1 : 1)];
+    if (next && !target.disabled) {
+      if (slot === "left") state.leftShotId = next.id;
+      else state.rightShotId = next.id;
+      state.video[slot].playing = false;
+      state.video[slot].progress = 0;
+    }
   } else if (action === "open-picker") {
     state.pickerSlot = target.dataset.slot;
     state.pickerSource = "session";
     state.historySessionId = null;
+    clearTour();
   } else if (action === "close-picker") {
     state.pickerSlot = null;
   } else if (action === "source") {
     state.pickerSource = target.dataset.source;
     state.historySessionId = null;
+    clearTour();
   } else if (action === "history-session") {
     state.historySessionId = target.dataset.session;
   } else if (action === "history-back") {
     state.historySessionId = null;
+  } else if (action === "tour-player") {
+    state.tourPlayerId = target.dataset.player;
+    state.tourOpen = { Driver: false, Iron: false };
+  } else if (action === "tour-back") {
+    clearTour();
+  } else if (action === "tour-club") {
+    const club = target.dataset.club;
+    if (club === "Driver" || club === "Iron") state.tourOpen[club] = !state.tourOpen[club];
   } else if (action === "choose") {
     if (state.pickerSlot === "left") state.leftShotId = target.dataset.shot;
     if (state.pickerSlot === "right") state.rightShotId = target.dataset.shot;
     state.video[state.pickerSlot].playing = false;
     state.video[state.pickerSlot].progress = 0;
     state.pickerSlot = null;
+  } else if (action === "video-angle") {
+    const clip = state.video[target.dataset.slot];
+    const angle = target.dataset.angle;
+    if (clip && (angle === "fo" || angle === "dl")) clip.angle = angle;
   } else if (action === "video") {
     const clip = state.video[target.dataset.slot];
     if (clip.progress >= 1) clip.progress = 0;
@@ -817,6 +1209,17 @@ root.addEventListener("click", (event) => {
     state.viewStyle = target.dataset.styleValue;
   } else if (action === "theme") {
     state.theme = target.dataset.themeValue;
+  } else if (action === "hide-video") {
+    state.hideShotsWithoutVideo = target.dataset.hideVideo === "on";
+  } else if (action === "frame-style") {
+    const next = target.dataset.frameStyle;
+    if (next === "session" || next === "always") state.frameStyle = next;
+  } else if (action === "shot-nav") {
+    const next = target.dataset.navStyle;
+    if (next === "left" || next === "split") state.shotNavStyle = next;
+  } else if (action === "close-style") {
+    const next = target.dataset.closeStyle;
+    if (next === "icon" || next === "both" || next === "word") state.closeStyle = next;
   } else if (action === "diff") {
     state.showDifference = target.dataset.diff === "on";
   } else if (action === "new-shot") {
@@ -830,6 +1233,13 @@ root.addEventListener("click", (event) => {
     resetAll();
     return;
   }
+  render();
+});
+
+root.addEventListener("change", (event) => {
+  const select = event.target.closest(".shotlist-metric-select");
+  if (!select) return;
+  if (metricDefs.some(([key]) => key === select.value)) state.listMetric = select.value;
   render();
 });
 

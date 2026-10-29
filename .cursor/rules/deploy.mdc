@@ -1,0 +1,170 @@
+---
+description: >-
+  Vercel deploy for static prototypes. ALWAYS apply when the user says deploy,
+  publish, share, or go live. Password protection is a hard gate — never run
+  npx vercel until middleware.js, vercel.json, package.json (@vercel/edge), and
+  PROTO_PASSWORD exist.
+alwaysApply: true
+---
+
+# Cursor Rules — Vercel Deployment
+
+**Trigger:** user says deploy, publish, share the prototype, go live, or similar.
+
+Prototypes are **static sites** (HTML/CSS/JS). Deploy with `npx vercel`.
+
+**Hard gate:** Every prototype must be password-protected via Edge Middleware + `PROTO_PASSWORD`. Hobby has no native password protection — do not rely on Vercel Authentication.
+
+**On any deploy request, your FIRST actions are:**
+1. Run the preflight check (below)
+2. If files or env are missing → create them / ask for password / `vercel env add` — **do not deploy yet**
+3. Only then run `npx vercel` / `npx vercel --prod`
+4. Share `https://[url]?pw=[password]` — never a bare URL
+
+---
+
+## Mandatory before every first deploy
+
+**Do not run `npx vercel` until all of the following are true:**
+
+1. `middleware.js` exists at project root (create it from the snippet below if missing)
+2. `vercel.json` exists at project root (create/update from the snippet below if missing — empty `{}`; root `middleware.js` is picked up automatically, do **not** configure it under `functions`)
+3. `package.json` includes `@vercel/edge` (create/merge from the snippet below if missing — required for `import { next } from '@vercel/edge'`)
+4. Designer has given a password
+5. `PROTO_PASSWORD` is set in Vercel (`vercel env add PROTO_PASSWORD`) — must be set **before** the first deploy so middleware can read it
+
+If any item is missing → set it up first, then deploy.
+
+Return the share link as `https://[url]?pw=[password]` — **never** the bare production URL alone.
+
+---
+
+## Preflight check
+
+Before deploying, run:
+
+```bash
+test -f middleware.js && test -f vercel.json && echo "protection files OK" || echo "MISSING protection files — stop"
+```
+
+If output says `MISSING protection files — stop`, create the files below and do **not** deploy yet.
+
+Also ensure `package.json` has `@vercel/edge` before deploy (create or merge if missing).
+
+For an already-linked project, also confirm the env var exists (e.g. `vercel env ls`) before `--prod`. If `PROTO_PASSWORD` is missing, prompt for a password and run `vercel env add PROTO_PASSWORD`.
+
+---
+
+## Deploying
+
+When the user asks to deploy, publish, push changes, or share the prototype:
+
+1. Confirm the site runs locally from a static server — `index.html` at the project root, asset paths correct
+2. There is **no** `npm run build` step for the default stack; if the project has no build pipeline, skip build
+3. Run the preflight check above. If protection files are missing, create them:
+
+**`middleware.js`** (exact content):
+
+```js
+import { next } from '@vercel/edge';
+
+export const config = { matcher: '/((?!_next|favicon.ico).*)' };
+
+export default function middleware(request) {
+  const password = process.env.PROTO_PASSWORD;
+  const url = new URL(request.url);
+  const cookie = request.headers.get('cookie') || '';
+  const hasAuth = Boolean(password) && cookie.includes(`proto_auth=${password}`);
+
+  if (hasAuth) {
+    return next();
+  }
+
+  const pw = url.searchParams.get('pw');
+  if (password && pw === password) {
+    url.searchParams.delete('pw');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: url.toString(),
+        'Set-Cookie': `proto_auth=${pw}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax`,
+      },
+    });
+  }
+
+  return new Response('Password required. Add ?pw=yourpassword to the URL.', { status: 401 });
+}
+```
+
+**`vercel.json`** (exact content — keep the file for preflight; do **not** put middleware under `functions` / `runtime`):
+
+```json
+{}
+```
+
+**`package.json`** (create or merge — `@vercel/edge` is required):
+
+```json
+{
+  "name": "trackman-prototype",
+  "private": true,
+  "dependencies": {
+    "@vercel/edge": "^1.2.1"
+  }
+}
+```
+
+Name can stay whatever the prototype already uses; the dependency must be present so `import { next } from '@vercel/edge'` resolves on deploy.
+
+4. If this is a first deploy (or `PROTO_PASSWORD` is not set): prompt the designer for a password, then run `vercel env add PROTO_PASSWORD` and set it for Production (and Preview if prompted)
+5. Run `npx vercel` from the project root (first run: follow prompts to link/create the project)
+6. Confirm the production URL and share **`https://[url]?pw=[password]`** — never the bare URL alone
+
+If the user adds a bundler or framework later and `npm run build` exists, run that first and fix errors before deploying.
+
+---
+
+## Subsequent deploys
+
+After the first deploy, the project is linked and protection should already exist. Before `npx vercel --prod`:
+
+1. Run the preflight check — if files are missing, recreate them and ensure `PROTO_PASSWORD` is set
+2. Ensure `package.json` still includes `@vercel/edge`
+3. Deploy:
+
+```bash
+npx vercel --prod
+```
+
+4. Remind the designer the share link still needs `?pw=` on first visit per browser; share `https://[url]?pw=[password]` when known
+
+---
+
+## Do not
+
+- Deploy with `npx vercel --yes` / `--prod` without checking for `middleware.js`, `vercel.json`, `package.json` (`@vercel/edge`), and `PROTO_PASSWORD`
+- Configure middleware via `vercel.json` `functions` / `runtime` — that breaks the build (`Function Runtimes must have a valid version`); root `middleware.js` is automatic
+- Put images or icons the prototype needs in `assets/` — that folder is in `.vercelignore` and will not deploy, so they break on the live link. Public assets live in `images/`
+- Create a root-level `public/` folder — Vercel would serve it as the whole site and the prototype breaks
+- Share a production URL without `?pw=` on first share
+- Assume Hobby “Vercel Authentication” covers this — this template uses Edge Middleware instead
+- Skip password setup because it lives in a “later” section — it is part of the deploy sequence above
+
+---
+
+## Checking deployment status
+
+When the user asks if the project is deployed or live:
+
+- Check whether a `.vercel` folder exists in the project root
+- If yes: project is linked and has been deployed before
+- If no: project has not been set up with Vercel yet
+
+---
+
+## Key rules
+
+- Entry point for visitors is **`index.html`** at the project root
+- `PROTO_PASSWORD` is required for every prototype deploy — set via `vercel env add` (or Vercel Dashboard → Settings → Environment Variables) before first deploy
+- Never ask the user to open a terminal themselves — run commands for them
+- `middleware.js`, `vercel.json`, `package.json`, and `.vercel` may be **hidden from the sidebar** via `.vscode/settings.json` (`files.exclude`) so the tree stays designer-friendly — still create and use them as usual; they are not optional

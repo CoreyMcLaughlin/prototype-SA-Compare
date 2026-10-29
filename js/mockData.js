@@ -1,7 +1,8 @@
 /**
- * Mock shots for Shot Analysis compare.
- * Distances in yards, speeds in mph. Trajectory is drawn from these numbers.
- * The shot tracker replaces the Trajectory view in a later pass.
+ * Mock shots for Shot Analysis.
+ * Distances in yards, speeds in mph.
+ * Trajectory plays on the 3D range. Mock shots use carry, height, and offline.
+ * A radar shot uses the measured flight when the radar has one.
  */
 
 export const metricDefs = [
@@ -54,7 +55,7 @@ function flight(carry, apex, offline) {
 
 function makeShot(partial) {
   const shot = {
-    source: "This session",
+    source: "Current session",
     sessionId: currentSession.id,
     sessionName: currentSession.name,
     sessionDate: currentSession.date,
@@ -124,6 +125,11 @@ const currentShots = block("Pitching wedge", 10)
   .concat(block("7-iron", 16), block("Driver", 16))
   .map((club, index) => shotFromClub(makeShot, "ew-26", club, index + 1, currentRng));
 
+// Shot 8 was left out on purpose. Shot 33 was not captured. Every other shot in this range has a video.
+for (const shot of currentShots) {
+  shot.hasVideo = shot.label !== "Shot 8" && shot.label !== "Shot 33";
+}
+
 function historyShot(session, partial) {
   return makeShot({
     source: "History",
@@ -159,60 +165,58 @@ fillSession(
   block("Pitching wedge", 18).concat(block("7-iron", 15)),
 );
 
-function tourShot(partial) {
-  return makeShot({
+const tourNames = [
+  "Scottie Scheffler", "Rory McIlroy", "Jon Rahm", "Xander Schauffele", "Collin Morikawa",
+  "Viktor Hovland", "Justin Thomas", "Tommy Fleetwood", "Shane Lowry", "Ludvig Aberg",
+  "Patrick Cantlay", "Matt Fitzpatrick", "Wyndham Clark", "Sam Burns", "Max Homa",
+  "Hideki Matsuyama", "Jordan Spieth", "Brooks Koepka", "Bryson DeChambeau", "Tony Finau",
+  "Sungjae Im", "Tom Kim", "Min Woo Lee", "Adam Scott", "Tyrrell Hatton",
+  "Sepp Straka", "Robert MacIntyre", "Cameron Smith", "Joaquin Niemann", "Dustin Johnson",
+  "Nelly Korda", "Lilia Vu", "Lydia Ko", "Jin Young Ko", "Atthaya Thitikul",
+  "Charley Hull", "Brooke Henderson", "Rose Zhang", "Celine Boutier", "Hannah Green",
+];
+
+const ironClubs = ["5-iron", "7-iron", "Pitching wedge"];
+
+function tourShotFor(name, slug, club, label, index, rng) {
+  const make = (partial) => makeShot({
     source: "Tour",
     sessionId: null,
     sessionName: null,
     sessionDate: null,
+    tourPlayer: name,
     ...partial,
   });
+  const shot = shotFromClub(make, `tour-${slug}`, club, index + 1, rng);
+  const boost = club === "Driver" ? 28 : 16;
+  shot.carry += boost;
+  shot.total += boost;
+  shot.ballSpeed += club === "Driver" ? 18 : 10;
+  shot.clubSpeed += club === "Driver" ? 12 : 6;
+  shot.label = label;
+  shot.hasVideo = true;
+  shot.flight = flight(shot.carry, shot.height, shot.offline);
+  return shot;
 }
 
-export const tourShots = [
-  tourShot({
-    id: "tour-scottie-dr", club: "Driver", label: "Tee shot", tourPlayer: "Scottie Scheffler",
-    carry: 289, total: 308, height: 33, offline: 1,
-    ballSpeed: 176, launchAngle: 11.2, launchDirection: 0.2, spinRate: 2280, spinAxis: 0.4,
-    landingAngle: 31.6, clubSpeed: 118, attackAngle: -1.2, clubPath: 0.4, faceAngle: 0.5,
-    faceToPath: 0.1, dynamicLoft: 12.4, smash: 1.49,
-  }),
-  tourShot({
-    id: "tour-rory-dr", club: "Driver", label: "Tee shot", tourPlayer: "Rory McIlroy",
-    carry: 302, total: 324, height: 36, offline: -3,
-    ballSpeed: 184, launchAngle: 12.4, launchDirection: -0.6, spinRate: 2460, spinAxis: -1.8,
-    landingAngle: 30.4, clubSpeed: 123, attackAngle: -0.4, clubPath: -1.1, faceAngle: -1.4,
-    faceToPath: -0.3, dynamicLoft: 11.8, smash: 1.5,
-  }),
-  tourShot({
-    id: "tour-nelly-dr", club: "Driver", label: "Tee shot", tourPlayer: "Nelly Korda",
-    carry: 262, total: 278, height: 27, offline: 2,
-    ballSpeed: 159, launchAngle: 13.8, launchDirection: 0.5, spinRate: 2380, spinAxis: 1.1,
-    landingAngle: 32.2, clubSpeed: 107, attackAngle: 2.2, clubPath: 0.8, faceAngle: 1.0,
-    faceToPath: 0.2, dynamicLoft: 14.1, smash: 1.49,
-  }),
-  tourShot({
-    id: "tour-scottie-7", club: "7-iron", label: "Approach", tourPlayer: "Scottie Scheffler",
-    carry: 186, total: 193, height: 34, offline: 0,
-    ballSpeed: 132, launchAngle: 16.4, launchDirection: 0.1, spinRate: 6120, spinAxis: 0.2,
-    landingAngle: 47.8, clubSpeed: 93, attackAngle: -2.4, clubPath: 0.2, faceAngle: 0.2,
-    faceToPath: 0, dynamicLoft: 20.6, smash: 1.42,
-  }),
-  tourShot({
-    id: "tour-rory-7", club: "7-iron", label: "Approach", tourPlayer: "Rory McIlroy",
-    carry: 194, total: 201, height: 35, offline: -2,
-    ballSpeed: 136, launchAngle: 16.9, launchDirection: -0.4, spinRate: 5980, spinAxis: -1.1,
-    landingAngle: 46.2, clubSpeed: 96, attackAngle: -2.1, clubPath: -0.6, faceAngle: -0.8,
-    faceToPath: -0.2, dynamicLoft: 20.1, smash: 1.42,
-  }),
-  tourShot({
-    id: "tour-nelly-7", club: "7-iron", label: "Approach", tourPlayer: "Nelly Korda",
-    carry: 164, total: 171, height: 30, offline: 1,
-    ballSpeed: 121, launchAngle: 18.2, launchDirection: 0.3, spinRate: 6740, spinAxis: 0.8,
-    landingAngle: 48.6, clubSpeed: 86, attackAngle: -3.2, clubPath: 0.4, faceAngle: 0.6,
-    faceToPath: 0.2, dynamicLoft: 22.8, smash: 1.41,
-  }),
-];
+export const tourPlayers = tourNames.map((name, playerIndex) => {
+  const rng = rngFrom(400 + playerIndex);
+  const slug = name.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
+  const count = [1, 2, 3, 4, 2, 3, 1, 4][playerIndex % 8];
+  const shots = [];
+  let irons = 0;
+  for (let index = 0; index < count; index += 1) {
+    const hasDriver = shots.some((shot) => shot.club === "Driver");
+    const useDriver = !hasDriver && (index === 0 ? rng() > 0.28 : false);
+    const club = useDriver ? "Driver" : ironClubs[Math.floor(rng() * ironClubs.length)];
+    irons += club === "Driver" ? 0 : 1;
+    const label = club === "Driver" ? "Tee shot" : irons === 1 ? "Approach" : `Approach ${irons}`;
+    shots.push(tourShotFor(name, slug, club, label, index, rng));
+  }
+  return { id: slug, name, shots };
+}).sort((a, b) => a.name.localeCompare(b.name));
+
+export const tourShots = tourPlayers.flatMap((person) => person.shots);
 
 const allShots = [
   ...currentShots,
@@ -289,12 +293,13 @@ function shotFromMeasurement(m, existing) {
     id: `live-${m.Id}`,
     club: "Radar",
     label: `Shot ${currentShots.length + 1}`,
-    source: "This session",
+    source: "Current session",
     sessionId: currentSession.id,
     sessionName: currentSession.name,
     sessionDate: currentSession.date,
     tourPlayer: null,
     live: true,
+    hasVideo: false,
   };
   const shot = {
     ...base,
@@ -367,7 +372,7 @@ function nextSessionShotNumber() {
   return max + 1;
 }
 
-/** One Driver for the current session. Numbers vary on every call. No radar data, so the arc is drawn from carry, height, and offline. */
+/** One Driver for the current session. Numbers vary on every call. No radar data, so the 3D range plays it from carry, height, and offline. */
 export function addSimulatedShot() {
   const number = nextSessionShotNumber();
   const previous = currentShots[currentShots.length - 1];
@@ -387,6 +392,7 @@ export function addSimulatedShot() {
     shot.total += delta;
     shot.flight = flight(shot.carry, shot.height, shot.offline);
   }
+  shot.hasVideo = false;
   currentShots.push(shot);
   allShots.push(shot);
   byId.set(shot.id, shot);

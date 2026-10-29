@@ -1,0 +1,56 @@
+# Product Context
+
+**Status:** 🟡 TEMPLATE — Fill this in before starting your first prototype.
+<!-- Once filled, change status to: ✅ FILLED -->
+
+> Fill in the sections below. Delete anything that does not apply.
+> Once complete, reuse this file in every new prototype — no need to fill it in again.
+> Cursor will use this to make better decisions about what you are building.
+
+## How to update this file
+- Add new terms to the terminology table as they come up during a session
+- Add to technical constraints as new limitations are discovered
+- Do not rewrite existing sections without checking first
+
+---
+
+## What this product does
+[One paragraph. What is it, who uses it, what problem does it solve.]
+
+---
+
+## Users
+
+| User | Interface | Goals |
+|---|---|---|
+| [User type] | [Where they work] | [What they are trying to do] |
+
+---
+
+## Key pain areas
+[What are the biggest problems users have with the current product?]
+
+---
+
+## Technical constraints
+[What can and cannot be changed? What are the hard limitations designers should know about before prototyping?]
+
+---
+
+## Design priorities
+[What matters most right now? What should this prototype focus on?]
+
+---
+
+## Key terminology
+
+| Term | Meaning |
+|---|---|
+| [Term] | [What it means in this product context] |
+
+---
+
+## References
+- Production site: [URL or local path]
+- Design system: [Link or path]
+- Research data: [Path to NPS, user feedback, or any other relevant data]

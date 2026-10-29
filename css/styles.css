@@ -16,6 +16,12 @@
   --stroke-subtle: rgba(31, 31, 31, 0.12);
   --overlay: rgba(0, 0, 0, 0.5);
   --brand: #ec691a;
+  --club-driver: #ec691a;
+  --club-3-wood: #3d9a5f;
+  --club-5-iron: #4c86e8;
+  --club-7-iron: #1aa6b8;
+  --club-pitching-wedge: #c45c9a;
+  --club-radar: #8e95a3;
   --selected-tint: rgba(236, 105, 26, 0.12);
   --mate-fill: rgba(31, 31, 31, 0.28);
   --video-bg: #1f1f1f;
@@ -46,7 +52,7 @@
   --icon-md: 1.25rem; /* 20px */
 }
 
-/* Dark theme: switched from the debug panel. Brand orange stays the same. */
+/* Dark is the default. Light is chosen from Prototype controls. Brand orange stays the same. */
 :root[data-theme="dark"] {
   --surface-page: #121212;
   --surface-card: #1c1c1c;
@@ -112,6 +118,12 @@
 .button--primary {
   color: var(--content-on-brand);
   background: var(--brand);
+}
+
+.button:disabled {
+  color: var(--content-placeholder);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .icon-button {
@@ -199,6 +211,61 @@ p {
   min-height: 100vh;
 }
 
+/* Performance Studio window. The bars are the shared PNG; the black middle is the prototype. */
+.product-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.product-frame-bar {
+  flex: none;
+  width: 100%;
+  pointer-events: none;
+  background-image: url("../images/sa-frame.png");
+  background-repeat: no-repeat;
+  background-size: 100% auto;
+}
+
+.product-frame-bar--top {
+  aspect-ratio: 1024 / 30;
+  background-position: top center;
+}
+
+.product-frame-bar--bottom {
+  aspect-ratio: 1024 / 34;
+  background-position: bottom center;
+}
+
+.product-frame-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.product-frame .app-shell {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.product-frame .shell-body .shotlist {
+  height: 100%;
+  min-height: 0;
+}
+
+html[data-frame="on"] .dbg-fab {
+  bottom: calc(1.25rem + (100vw * 34 / 1024));
+}
+
+html[data-frame="on"] .dbg-pop {
+  bottom: calc(5.25rem + (100vw * 34 / 1024));
+}
+
 .topbar {
   display: flex;
   align-items: baseline;
@@ -275,11 +342,6 @@ p {
 .compare-shotlist-head > span {
   display: grid;
   gap: var(--space-xs);
-}
-
-.compare-shotlist-scroll {
-  min-height: 0;
-  overflow: auto;
 }
 
 .shell-body {
@@ -395,9 +457,36 @@ p {
   font-weight: 600;
 }
 
-.shotlist-scroll {
+.shotlist-scroll,
+.compare-shotlist-scroll {
   flex: 1;
+  min-height: 0;
   overflow: auto;
+}
+
+.shotlist-metric {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--stroke-subtle);
+}
+
+.shotlist-metric-select {
+  max-width: 11rem;
+  min-height: 2rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--stroke-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--content-primary);
+  font: inherit;
+  font-size: var(--text-helper);
 }
 
 .club-group-label,
@@ -447,14 +536,41 @@ p {
 .ball-dot {
   width: 0.5rem;
   height: 0.5rem;
+  flex: none;
   border-radius: 50%;
-  background: var(--brand);
+  background: var(--content-placeholder);
+}
+
+.ball-dot[data-club="driver"] { background: var(--club-driver); }
+.ball-dot[data-club="3-wood"] { background: var(--club-3-wood); }
+.ball-dot[data-club="5-iron"] { background: var(--club-5-iron); }
+.ball-dot[data-club="7-iron"] { background: var(--club-7-iron); }
+.ball-dot[data-club="pitching-wedge"] { background: var(--club-pitching-wedge); }
+.ball-dot[data-club="radar"] { background: var(--club-radar); }
+
+.shot-figures {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
 }
 
 .shot-carry {
-  margin-left: auto;
   font-family: var(--font-display);
   font-size: var(--text-section-title);
+}
+
+.video-mark {
+  width: 1rem;
+  height: 1rem;
+  color: var(--content-secondary);
+}
+
+.no-video {
+  margin: 0;
+  color: var(--content-secondary);
+  font-size: var(--text-label);
+  text-align: center;
 }
 
 .inert-icon,
@@ -548,6 +664,29 @@ p {
   gap: var(--space-md);
   align-items: center;
   padding: var(--space-lg);
+}
+
+.slot-shot-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: none;
+}
+
+.slot-shot-nav.is-left {
+  gap: var(--space-sm);
+}
+
+.slot-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.slot-shot-nav .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .slot-club {
@@ -709,16 +848,53 @@ p {
 }
 
 .video-frame {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   border-radius: var(--radius-card);
   background: var(--video-bg);
 }
 
+.video-scene {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.video-angle {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-neutral);
+  overflow: hidden;
+}
+
+.video-angle button {
+  min-height: 2.5rem;
+  min-width: 2.75rem;
+  padding: 0 var(--space-sm);
+  border: 0;
+  background: transparent;
+  color: var(--content-secondary);
+  font: 600 var(--text-helper) / 1 var(--font-body);
+  cursor: pointer;
+}
+
+.video-angle button.on {
+  background: var(--brand);
+  color: var(--content-on-brand);
+}
+
 .video-frame .video-label {
-  color: rgba(246, 246, 246, 0.7);
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-md);
+  z-index: 1;
+  margin: 0;
+  color: rgba(246, 246, 246, 0.86);
 }
 
 .video-frame .traj-ground {
@@ -837,12 +1013,19 @@ p {
 
 .picker-row {
   width: 100%;
-  align-items: flex-start;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0;
+  align-items: center;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--space-sm);
   padding: var(--space-sm) var(--space-lg);
   font-size: var(--text-label);
+}
+
+.picker-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
 }
 
 .picker-row:hover {
@@ -868,27 +1051,82 @@ p {
 }
 
 .picker-session-row {
-  flex-direction: column;
-  justify-content: center;
-  gap: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
   min-height: var(--row-height);
   padding: var(--space-sm) var(--space-lg);
   font-size: var(--text-label);
   font-weight: 600;
 }
 
+.picker-session-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
 .picker-session-row:hover,
-.picker-back:hover {
+.picker-back:hover,
+.tour-club:hover {
   background: var(--surface-neutral);
 }
 
-.picker-back {
+.picker-back,
+.tour-club {
+  display: flex;
   align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
   min-height: 2.5rem;
   padding: var(--space-sm) var(--space-lg);
-  color: var(--brand);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
   font-size: var(--text-label);
   font-weight: 600;
+}
+
+.picker-back {
+  color: var(--brand);
+}
+
+.tour-club {
+  justify-content: space-between;
+  color: var(--content-secondary);
+}
+
+.chevron,
+.icon-x {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+.close-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border: 0;
+  background: transparent;
+  color: var(--content-secondary);
+  cursor: pointer;
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.close-control--icon {
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.close-control:hover {
+  color: var(--content-primary);
 }
 
 .text-button {

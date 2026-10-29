@@ -1,0 +1,11 @@
+# This file keeps the empty `images/` folder in the template.
+#
+# PUBLIC FOLDER — put every image and icon the prototype uses here:
+# icons exported from Figma, logos, illustrations, UI screenshots.
+# Subfolders are fine, e.g. `images/icons/close.svg`.
+#
+# This folder is committed and deployed, so paths like
+# `<img src="images/icons/close.svg">` work on the live link.
+#
+# Do not use `assets/` for these (local-only, never deploys) and do not
+# add a root-level `public/` folder (Vercel would serve it as the whole site).

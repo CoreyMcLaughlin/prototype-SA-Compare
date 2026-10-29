@@ -1,0 +1,66 @@
+# Prototype Scope
+
+## Purpose
+This is a prototype — not production code. The goal is something testable with real users, built fast. Optimise for speed over production hardening (error handling, accessibility passes, performance tuning, edge-case coverage) — but layout, typography, spacing and colour should still match the agreed Figma frames unless the PRD says otherwise.
+
+---
+
+## The One Question to Ask Before Building Anything
+> User testing: "Does this help test the idea with a user, or am I just over-engineering?"
+> Concept: "Does this help show the idea to the product team, or am I just over-engineering?"
+
+If it doesn't help — skip it.
+
+---
+
+## What to Build
+- The happy path only
+- Realistic mock data (no "Lorem Ipsum", no "User 1, User 2")
+- Enough visual fidelity to feel like a real Trackman product
+- Interactions that are relevant to what's being tested
+
+## What to Skip
+- Authentication — use a hardcoded mock user
+- Error states — unless the error handling IS what's being tested
+- Loading states — unless the loading experience IS what's being tested
+- Form validation — keep it minimal
+- Unit tests — not needed
+- Performance optimisation — not needed
+- Responsive design — build the breakpoints listed in the PRD. If Figma includes mobile/tablet frames and the PRD has them in scope, they must be built. Default to desktop only when the PRD does not specify.
+- Animations — build motion that is specced in the Figma frames in scope, or that IS what's being tested. Skip decorative motion not in the PRD.
+
+---
+
+## Trackman Look & Feel
+Prototypes should look like Trackman products, not generic AI output.
+
+- Use CSS variables or consistent semantic colours aligned with TDS (see design-system.mdc)
+- Page background should read as product chrome (typically light grey ~#f6f6f6), not a flat white void unless the frame specifies it
+- Brand accent is orange (~#ec691a) — not blue as the primary brand colour
+- Data visualisation: positive = green, negative = red, neutral = yellow where relevant
+- Use realistic Trackman data — distances in yards, speeds in mph, real-sounding player names
+
+---
+
+## Mock Data Rules
+- Keep mock data in `js/mockData.js` (or dedicated modules under `js/`)
+- Make it realistic — a designer showing this to a PO or user should not have to say "ignore the dummy data"
+- Trackman context: golf shots, ball speed, launch angle, carry distance, player profiles, session data
+
+---
+
+## Complexity Check
+If Cursor suggests any of the following unprompted — stop and question whether it's needed:
+- Setting up authentication or user sessions
+- Complex state management (Redux, Zustand)
+- API integrations beyond what's being tested
+- Database setup (if you need a backend, ask explicitly and follow `supabase.mdc`)
+- Abstracting components into a shared library
+
+---
+
+## Definition of Done for a Prototype
+- A user can click through the relevant flow
+- It looks like a Trackman product
+- It uses realistic data
+- It can be deployed to Vercel and shared via a link

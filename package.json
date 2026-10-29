@@ -1,0 +1,7 @@
+{
+  "name": "trackman-prototype",
+  "private": true,
+  "dependencies": {
+    "@vercel/edge": "^1.2.1"
+  }
+}

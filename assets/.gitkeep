@@ -1,0 +1,12 @@
+# This file keeps the empty `assets/` folder in the template.
+#
+# PRIVATE FOLDER — the designer's own files only.
+#
+# Drop local-only assets here (DB exports, screenshots, PDFs, etc.).
+# Anything you add is ignored by git (see .gitignore) and excluded from
+# Vercel deploys (see .vercelignore) — so it is never committed to source
+# and never downloadable from the published prototype.
+#
+# Assets the prototype needs (icons exported from Figma, logos, images)
+# do NOT belong here — they would be missing on the deployed link.
+# Put those in `images/` at the project root instead.
