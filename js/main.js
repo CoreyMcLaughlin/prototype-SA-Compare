@@ -26,14 +26,28 @@ const freshVideo = () => ({
   shell: freshClip(),
 });
 
+const freshGraphClip = () => ({
+  category: "ks",
+  peaksOpen: true,
+  rotation: ["pelvis-turn", "torso-turn"],
+  translation: ["pelvis-sway", "torso-sway"],
+  progress: 0.62,
+});
+
+const freshGraph = () => ({
+  left: freshGraphClip(),
+  right: freshGraphClip(),
+  shell: freshGraphClip(),
+});
+
 const state = {
   screen: "shell",
   selectedShotId: null,
   leftShotId: null,
   rightShotId: null,
-  leftView: "trajectory",
-  rightView: "tiles",
-  shellView: "trajectory",
+  leftView: "video",
+  rightView: "video",
+  shellView: "video",
   pickerSlot: null,
   pickerSource: "session",
   historySessionId: null,
@@ -42,15 +56,20 @@ const state = {
   closeStyle: "icon",
   showDifference: false,
   theme: "dark",
-  viewStyle: "chips",
+  viewStyle: "segmented",
+  panelStyle: "flat",
   debugOpen: false,
   shotListOpen: false,
   shotListStyle: "panel",
   hideShotsWithoutVideo: false,
   shotNavStyle: "left",
-  frameStyle: "session",
+  screenRatio: "16-9",
+  fontFamily: "open-sans",
+  compareSplit: 50,
   listMetric: "carry",
+  videoTiles: { shell: false, left: false, right: false },
   video: freshVideo(),
+  graph: freshGraph(),
 };
 
 let videoTimer = null;
@@ -68,6 +87,11 @@ function slotShot(slot) {
   return id ? getShot(id) : null;
 }
 
+function clipShot(slot) {
+  if (slot === "shell") return getShot(activeShotId());
+  return slotShot(slot);
+}
+
 function slotView(slot) {
   return slot === "left" ? state.leftView : state.rightView;
 }
@@ -76,22 +100,22 @@ function otherShot(slot) {
   return slotShot(slot === "left" ? "right" : "left");
 }
 
+function showsNumbers(slot) {
+  const view = slotView(slot);
+  if (view === "tiles" || view === "table") return true;
+  return view === "video" && Boolean(state.videoTiles[slot]);
+}
+
 function bothNumeric() {
-  const numeric = new Set(["tiles", "table"]);
-  return Boolean(
-    slotShot("left") &&
-      slotShot("right") &&
-      numeric.has(state.leftView) &&
-      numeric.has(state.rightView),
-  );
+  return Boolean(slotShot("left") && slotShot("right") && showsNumbers("left") && showsNumbers("right"));
 }
 
 function openCompare() {
   state.screen = "compare";
   state.leftShotId = activeShotId();
   state.rightShotId = null;
-  state.leftView = "trajectory";
-  state.rightView = "tiles";
+  state.leftView = "video";
+  state.rightView = "video";
   state.pickerSlot = null;
   state.shotListOpen = false;
   state.video = freshVideo();
@@ -106,9 +130,9 @@ function resetAll() {
   state.selectedShotId = null;
   state.rightShotId = null;
   state.leftShotId = keepScreen === "compare" ? latestShot().id : null;
-  state.leftView = "trajectory";
-  state.rightView = "tiles";
-  state.shellView = "trajectory";
+  state.leftView = "video";
+  state.rightView = "video";
+  state.shellView = "video";
   state.pickerSlot = null;
   state.pickerSource = "session";
   state.historySessionId = null;
@@ -117,15 +141,20 @@ function resetAll() {
   state.closeStyle = "icon";
   state.showDifference = false;
   state.theme = "dark";
-  state.viewStyle = "chips";
+  state.viewStyle = "segmented";
+  state.panelStyle = "flat";
   state.debugOpen = true;
   state.shotListOpen = false;
   state.shotListStyle = "panel";
   state.hideShotsWithoutVideo = false;
   state.shotNavStyle = "left";
-  state.frameStyle = "session";
+  state.screenRatio = "16-9";
+  state.fontFamily = "open-sans";
+  state.compareSplit = 50;
   state.listMetric = "carry";
+  state.videoTiles = { shell: false, left: false, right: false };
   state.video = freshVideo();
+  state.graph = freshGraph();
   render();
 }
 
@@ -158,7 +187,12 @@ function tickVideo() {
     const button = root.querySelector(`[data-video-toggle="${slot}"]`);
     if (bar) bar.style.width = `${clip.progress * 100}%`;
     if (button) button.textContent = clip.playing ? "Pause" : "Play";
-    applySwing(slot, clip.progress);
+    const shot = clipShot(slot);
+    const still = root.querySelector(`[data-video-still="${slot}"]`);
+    if (shot && still) {
+      const next = stillSrc(shot, clip.angle, clip.progress);
+      if (still.getAttribute("src") !== next) still.src = next;
+    }
   });
   syncVideoTimer();
 }
@@ -298,6 +332,58 @@ function mountVisualisers() {
   });
 }
 
+function stageSize() {
+  if (state.screenRatio === "4-3") return { w: 1440, h: 1080 };
+  return { w: 1440, h: 810 };
+}
+
+function fitStage() {
+  const stage = root.querySelector(".ratio-stage");
+  if (!stage) return;
+  const { w, h } = stageSize();
+  const scale = Math.min(window.innerWidth / w, window.innerHeight / h);
+  stage.style.width = `${w}px`;
+  stage.style.height = `${h}px`;
+  stage.style.transform = `scale(${scale})`;
+  stage.style.left = `${(window.innerWidth - w * scale) / 2}px`;
+  stage.style.top = `${(window.innerHeight - h * scale) / 2}px`;
+}
+
+function bindSplit() {
+  const handle = root.querySelector(".compare-split");
+  if (!handle) return;
+  const apply = (percent) => {
+    const next = Math.min(75, Math.max(25, percent));
+    state.compareSplit = Math.round(next);
+    const body = handle.parentElement;
+    body.style.setProperty("--split-left", `${state.compareSplit}fr`);
+    body.style.setProperty("--split-right", `${100 - state.compareSplit}fr`);
+    handle.setAttribute("aria-valuenow", String(state.compareSplit));
+  };
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    const move = (moveEvent) => {
+      const rect = handle.parentElement.getBoundingClientRect();
+      if (!rect.width) return;
+      apply(((moveEvent.clientX - rect.left) / rect.width) * 100);
+    };
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  });
+  handle.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    apply(state.compareSplit + (event.key === "ArrowRight" ? 5 : -5));
+  });
+}
+
 function render() {
   const page = document.scrollingElement;
   const pageTop = page ? page.scrollTop : 0;
@@ -308,15 +394,18 @@ function render() {
 
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.viewStyle = state.viewStyle;
-  document.documentElement.dataset.frame = frameOn() ? "on" : "off";
+  document.documentElement.dataset.panels = state.panelStyle;
+  document.documentElement.dataset.font = state.fontFamily;
   const slide = slideShotList;
   slideShotList = false;
   parkVisualisers();
   const screen = state.screen === "shell" ? shellHtml() : compareHtml(slide);
-  root.innerHTML = withFrame(screen);
+  root.innerHTML = `<div class="ratio-fit"><div class="ratio-stage">${screen}</div></div>`;
   root.insertAdjacentHTML("beforeend", debugHtml());
   mountVisualisers();
   syncVideoTimer();
+  fitStage();
+  bindSplit();
 
   if (page) {
     page.scrollTop = pageTop;
@@ -400,23 +489,6 @@ function sessionShotRowsHtml() {
       `;
     })
     .join("");
-}
-
-/** Hides in compare is the default. Always on keeps the window in both screens. */
-function frameOn() {
-  if (state.frameStyle === "always") return true;
-  return state.screen !== "compare";
-}
-
-function withFrame(inner) {
-  if (!frameOn()) return inner;
-  return `
-    <div class="product-frame">
-      <div class="product-frame-bar product-frame-bar--top" aria-hidden="true"></div>
-      <div class="product-frame-body">${inner}</div>
-      <div class="product-frame-bar product-frame-bar--bottom" aria-hidden="true"></div>
-    </div>
-  `;
 }
 
 function shellHtml() {
@@ -527,8 +599,9 @@ function compareHtml(slide) {
             <p class="topbar-player">${esc(player.name)}</p>
             <p class="topbar-session">${esc(currentSession.name)} · ${esc(currentSession.date)}</p>
           </header>
-          <div class="compare-body">
+          <div class="compare-body" style="--split-left:${state.compareSplit}fr; --split-right:${100 - state.compareSplit}fr">
             ${slotHtml("left")}
+            <div class="compare-split" role="separator" aria-orientation="vertical" aria-label="Resize the two views" aria-valuemin="25" aria-valuemax="75" aria-valuenow="${state.compareSplit}" tabindex="0"></div>
             ${slotHtml("right")}
           </div>
         </div>
@@ -593,7 +666,7 @@ function slotHtml(slot) {
 
 function viewHtml(slot, shot, view) {
   if (view === "video") return videoHtml(slot, shot);
-  if (view === "graph") return graphHtml(shot);
+  if (view === "graph") return graphHtml(slot, shot);
   if (view === "trajectory") return trajectoryBlock(slot, shot);
   if (view === "dispersion") return dispersionHtml(shot);
   if (view === "tiles") return numbersHtml(slot, shot, "tiles");
@@ -604,6 +677,7 @@ function videoHtml(slot, shot) {
   if (!shot.hasVideo) return `<div class="video-view">${noVideoHtml()}</div>`;
   const clip = state.video[slot];
   const angle = clip.angle === "dl" ? "dl" : "fo";
+  const open = Boolean(state.videoTiles[slot]);
   const angleName = angle === "dl" ? "DL" : "FO";
   return `
     <div class="video-view">
@@ -618,18 +692,286 @@ function videoHtml(slot, shot) {
         </div>
         <button class="button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}">${clip.playing ? "Pause" : "Play"}</button>
         <div class="video-track"><span data-video-bar="${slot}" style="width:${clip.progress * 100}%"></span></div>
+        <button class="button video-tiles-toggle" type="button" data-action="video-tiles" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}" aria-label="${open ? "Hide data tiles" : "Show data tiles"}">${chevron(open ? "up" : "down")}</button>
       </div>
+      ${open ? `<div class="video-tiles">${tileMarkup(slot, shot)}</div>` : ""}
     </div>
   `;
 }
 
-function graphHtml(shot) {
-  if (!shot.hasVideo) return `<div class="graph-view">${noVideoHtml()}</div>`;
+const GRAPH_X0 = 52;
+const GRAPH_X1 = 700;
+const GRAPH_Y0 = 16;
+const GRAPH_Y1 = 468;
+const GRAPH_PARTS = {
+  pelvis: { label: "Pelvis", color: "#e23b3b" },
+  torso: { label: "Upper torso", color: "#3d9a5f" },
+  head: { label: "Head", color: "#4c86e8" },
+  arm: { label: "Lead arm", color: "#6b5bd2" },
+  club: { label: "Club head", color: "#ec691a" },
+  posture: { label: "Posture", color: "#e2b93b" },
+};
+const ROTATION_PARAMS = [
+  { id: "turn", label: "Turn", dash: "solid" },
+  { id: "bend", label: "Bend", dash: "dashed" },
+  { id: "tilt", label: "Tilt", dash: "dotted" },
+];
+const TRANSLATION_PARAMS = [
+  { id: "sway", label: "Sway", dash: "solid" },
+  { id: "thrust", label: "Thrust", dash: "dashed" },
+  { id: "lift", label: "Lift", dash: "dotted" },
+];
+const POSTURE_PARAMS = [
+  { id: "tilt", label: "Tilt", dash: "solid", color: "#e2b93b" },
+  { id: "bend", label: "Bend", dash: "dashed", color: "#7ec8e3" },
+];
+function shotSeed(shot) {
+  return [...String(shot.id)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function graphX(t) {
+  return GRAPH_X0 + t * (GRAPH_X1 - GRAPH_X0);
+}
+
+function graphY(value, yMin, yMax) {
+  const span = yMax - yMin || 1;
+  const t = (value - yMin) / span;
+  return GRAPH_Y1 - t * (GRAPH_Y1 - GRAPH_Y0);
+}
+
+function sampleCurve(item, t) {
+  const main = Math.exp(-((t - item.at) ** 2) / (2 * 0.075 ** 2));
+  const dip = Math.exp(-((t - (item.at - 0.16)) ** 2) / (2 * 0.045 ** 2));
+  return item.peak * main - Math.abs(item.peak) * 0.22 * dip;
+}
+
+function ksSeries(shot) {
+  const seed = shotSeed(shot);
+  const pelvis = 420 + (seed % 50);
+  const torso = pelvis + 210 + (seed % 30);
+  const arm = torso + 190 + (seed % 40);
+  const club = Math.min(1080, arm + 240 + (seed % 60));
+  return [
+    { key: "pelvis", label: "Pelvis", color: GRAPH_PARTS.pelvis.color, dash: "solid", peak: pelvis, at: 0.4, unit: "°/s" },
+    { key: "torso", label: "Upper torso", color: GRAPH_PARTS.torso.color, dash: "solid", peak: torso, at: 0.5, unit: "°/s" },
+    { key: "arm", label: "Lead arm", color: GRAPH_PARTS.arm.color, dash: "solid", peak: arm, at: 0.6, unit: "°/s" },
+    { key: "club", label: "Club head", color: GRAPH_PARTS.club.color, dash: "solid", peak: club, at: 0.7, unit: "°/s" },
+  ];
+}
+
+function paramDefs(category, segment) {
+  if (segment === "posture") return category === "rotation" ? POSTURE_PARAMS : [];
+  return category === "rotation" ? ROTATION_PARAMS : TRANSLATION_PARAMS;
+}
+
+function paramKey(segment, id) {
+  return `${segment}-${id}`;
+}
+
+function selectedSeries(shot, clip) {
+  const seed = shotSeed(shot);
+  const keys = clip.category === "rotation" ? clip.rotation : clip.translation;
+  return keys.map((key) => {
+    const [segment, id] = key.split("-");
+    const defs = paramDefs(clip.category, segment);
+    const def = defs.find((item) => item.id === id) || { label: id, dash: "solid" };
+    const part = GRAPH_PARTS[segment] || GRAPH_PARTS.pelvis;
+    const color = def.color || part.color;
+    const sign = (seed + key.length) % 2 === 0 ? 1 : -1;
+    const mag = clip.category === "translation" ? 2 + (seed % 4) : 18 + (seed % 20);
+    const at = 0.34 + ((seed + key.charCodeAt(0)) % 28) / 100;
+    const label = `${part.label} ${def.label}`;
+    return {
+      key,
+      label,
+      color,
+      dash: def.dash,
+      peak: sign * mag * (segment === "club" ? 1 : 1),
+      at,
+      unit: clip.category === "translation" ? "in" : "°",
+    };
+  });
+}
+
+function visibleSeries(shot, clip) {
+  if (clip.category === "ks") return ksSeries(shot);
+  return selectedSeries(shot, clip);
+}
+
+function axisFor(series, category) {
+  if (category === "ks") return { min: -400, max: 1000 };
+  let min = 0;
+  let max = 0;
+  series.forEach((item) => {
+    for (let i = 0; i <= 40; i += 1) {
+      const value = sampleCurve(item, i / 40);
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+  });
+  if (max - min < 8) {
+    min -= 8;
+    max += 8;
+  }
+  const pad = (max - min) * 0.18;
+  return { min: min - pad, max: max + pad };
+}
+
+function curvePoints(item, axis) {
+  const pts = [];
+  for (let i = 0; i <= 64; i += 1) {
+    const t = i / 64;
+    pts.push(`${graphX(t).toFixed(1)},${graphY(sampleCurve(item, t), axis.min, axis.max).toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
+
+function dashAttr(dash) {
+  if (dash === "dashed") return 'stroke-dasharray="7 4"';
+  if (dash === "dotted") return 'stroke-dasharray="2 3"';
+  return "";
+}
+
+function axisTicks(axis) {
+  const ticks = [];
+  for (let i = 0; i <= 4; i += 1) {
+    const value = axis.max - ((axis.max - axis.min) * i) / 4;
+    ticks.push({ value, y: graphY(value, axis.min, axis.max) });
+  }
+  return ticks;
+}
+
+function formatTick(value, category) {
+  if (category === "ks") return String(Math.round(value));
+  return Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1);
+}
+
+function graphChart(shot, clip) {
+  const series = visibleSeries(shot, clip);
+  const axis = axisFor(series, clip.category);
+  const x = graphX(clip.progress);
+  const guides = [
+    ["P5", 0.22],
+    ["P6", 0.36],
+    ["P7", 0.5],
+    ["P8", 0.64],
+    ["P9", 0.78],
+  ];
+  const lines = series
+    .map((item) => `<polyline points="${curvePoints(item, axis)}" fill="none" stroke="${item.color}" stroke-width="2.5" ${dashAttr(item.dash)} stroke-linejoin="round" stroke-linecap="round" />`)
+    .join("");
+  const bills = series
+    .map((item) => {
+      const value = sampleCurve(item, clip.progress);
+      const y = graphY(value, axis.min, axis.max);
+      return `<g data-billboard="${item.key}" transform="translate(${(x + 8).toFixed(1)} ${(y - 14).toFixed(1)})"><rect width="78" height="18" rx="2" fill="var(--surface-card)" stroke="${item.color}" /><text x="6" y="13" fill="var(--content-primary)" font-size="11">${Math.round(value)} ${item.unit}</text></g>`;
+    })
+    .join("");
+  const ticks = axisTicks(axis)
+    .map((tick) => `<text x="4" y="${(tick.y + 4).toFixed(1)}" fill="var(--content-secondary)" font-size="11">${formatTick(tick.value, clip.category)}</text>`)
+    .join("");
+  const pLabels = guides
+    .map(([label, t]) => `<text x="${graphX(t)}" y="492" text-anchor="middle" fill="var(--content-secondary)" font-size="11">${label}</text><line x1="${graphX(t)}" y1="${GRAPH_Y0}" x2="${graphX(t)}" y2="${GRAPH_Y1}" stroke="var(--stroke-subtle)" stroke-dasharray="2 4" />`)
+    .join("");
+  const empty = series.length ? "" : `<text x="360" y="250" text-anchor="middle" fill="var(--content-secondary)" font-size="14">Turn on a parameter</text>`;
   return `
-    <div class="graph-view">
-      <p class="helper-text">3D motion</p>
-      <div class="view-stage">${golferSvg(shot)}</div>
-      <p class="helper-text">This is the 3D motion view for this shot only. It does not change the other shot.</p>
+    <svg class="graph-svg" viewBox="0 0 720 508" role="img" aria-label="Motion graph">
+      <line x1="${GRAPH_X0}" y1="${graphY(0, axis.min, axis.max)}" x2="${GRAPH_X1}" y2="${graphY(0, axis.min, axis.max)}" stroke="var(--stroke-subtle)" />
+      ${pLabels}
+      ${ticks}
+      ${lines}
+      ${empty}
+      <line class="graph-playhead" x1="${x}" y1="${GRAPH_Y0}" x2="${x}" y2="${GRAPH_Y1}" stroke="var(--content-primary)" stroke-width="1.5" />
+      ${bills}
+    </svg>
+  `;
+}
+
+function peakRows(series) {
+  return series
+    .map((item, index) => {
+      const previous = series[index - 1];
+      const gain = previous ? item.peak - previous.peak : null;
+      const factor = previous && previous.peak ? item.peak / previous.peak : null;
+      const gainText = gain == null ? "–" : `${gain > 0 ? "+" : ""}${Math.round(gain)}`;
+      const factorText = factor == null ? "–" : factor.toFixed(2);
+      return `<tr><th scope="row"><span class="graph-swatch" style="background:${item.color}"></span>${item.label}</th><td>${Math.round(item.peak)} °/s</td><td>${gainText}</td><td>${factorText}</td></tr>`;
+    })
+    .join("");
+}
+
+function peakBadges(series) {
+  return [...series]
+    .sort((a, b) => a.at - b.at)
+    .map((item) => `<span class="graph-badge" style="background:${item.color}">${item.label}</span>`)
+    .join("");
+}
+
+function chipGroup(slot, clip, segment) {
+  const defs = paramDefs(clip.category, segment);
+  if (!defs.length) return "";
+  const selected = clip.category === "rotation" ? clip.rotation : clip.translation;
+  const part = GRAPH_PARTS[segment];
+  const chips = defs
+    .map((def) => {
+      const key = paramKey(segment, def.id);
+      const on = selected.includes(key) ? " is-on" : "";
+      const color = def.color || part.color;
+      return `<button class="graph-chip${on}" type="button" data-action="graph-chip" data-slot="${slot}" data-key="${key}" data-dash="${def.dash}" style="--line:${color}">${def.label}</button>`;
+    })
+    .join("");
+  return `
+    <div class="graph-segment">
+      <button class="graph-segment-name" type="button" data-action="graph-segment" data-slot="${slot}" data-segment="${segment}">${part.label}</button>
+      ${chips}
+    </div>
+  `;
+}
+
+function graphHtml(slot, shot) {
+  const clip = state.graph[slot];
+  const categories = [
+    ["ks", "Kinematic sequence"],
+    ["rotation", "Rotations"],
+    ["translation", "Translations"],
+  ];
+  const tabs = categories
+    .map(([id, label]) => {
+      const on = clip.category === id ? " is-on" : "";
+      return `<button class="graph-tab${on}" type="button" data-action="graph-category" data-slot="${slot}" data-category="${id}">${label}</button>`;
+    })
+    .join("");
+  const chips = clip.category === "ks"
+    ? ""
+    : `<div class="graph-chips">${["head", "torso", "pelvis", "posture"].map((segment) => chipGroup(slot, clip, segment)).join("")}</div>`;
+  const peaks = clip.category === "ks"
+    ? (() => {
+        const series = ksSeries(shot);
+        const open = clip.peaksOpen;
+        return `
+          <div class="graph-peaks">
+            <button class="graph-peaks-toggle" type="button" data-action="graph-peaks" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}">
+              ${chevron(open ? "down" : "right")}
+              <span>${open ? "Peak speeds" : "Peak order"}</span>
+              ${open ? "" : `<span class="graph-badges">${peakBadges(series)}</span>`}
+            </button>
+            ${open ? `<table class="graph-peak-table"><thead><tr><th scope="col"></th><th scope="col">Peak speed</th><th scope="col">Speed gain</th><th scope="col">Gain factor</th></tr></thead><tbody>${peakRows(series)}</tbody></table>` : ""}
+          </div>
+        `;
+      })()
+    : "";
+  return `
+    <div class="graph-view" data-graph-slot="${slot}">
+      <div class="graph-tabs" role="tablist" aria-label="Graph category">${tabs}</div>
+      ${chips}
+      <div class="graph-plot">
+        ${peaks}
+        ${graphChart(shot, clip)}
+      </div>
+      <label class="graph-scrub">
+        <span class="helper-text">Swing position</span>
+        <input type="range" min="0" max="1" step="0.01" value="${clip.progress}" data-graph-scrub="${slot}" aria-label="Swing position" />
+      </label>
     </div>
   `;
 }
@@ -724,157 +1066,93 @@ function dispersionHtml(shot) {
   `;
 }
 
-function numbersHtml(slot, shot, kind) {
+function normalizedMetric(shot, key) {
+  const value = shot[key];
+  if (value == null || Number.isNaN(Number(value))) return null;
+  const seed = [...String(shot.id)].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const sign = seed % 2 === 0 ? 1 : -1;
+  const step = (seed % 3) + 1;
+  if (key === "spinRate") return value + sign * step * 35;
+  if (key === "smash") return value + sign * step * 0.01;
+  if (key === "carry" || key === "total" || key === "height" || key === "ballSpeed" || key === "clubSpeed") {
+    return value + sign * step;
+  }
+  return value + sign * step * 0.2;
+}
+
+function metricText(value, unit, digits) {
+  if (value == null || Number.isNaN(Number(value))) return "–";
+  return `${formatMetric(value, digits)}${unit ? ` ${unit}` : ""}`;
+}
+
+function tileMarkup(slot, shot) {
   const other = slot === "shell" ? null : otherShot(slot);
   const showDelta = Boolean(other) && state.showDifference && bothNumeric();
-  const rows = metricDefs
+  return metricDefs
     .map(([key, label, unit, digits]) => {
       const comparable = showDelta && shot[key] != null && other[key] != null;
       const delta = comparable
         ? `<span class="delta">${formatDelta(shot[key] - other[key], digits)}</span>`
         : "";
-      if (kind === "tiles") {
-        return `<div class="tile"><p class="tile-label">${label}</p><p class="tile-value">${formatMetric(shot[key], digits)}</p><p class="tile-unit">${unit || "&nbsp;"}${delta}</p></div>`;
-      }
-      const value = shot[key] == null ? "–" : `${formatMetric(shot[key], digits)}${unit ? ` ${unit}` : ""}`;
-      return `<div class="table-row"><span>${label}</span><span class="table-value">${value}${delta}</span></div>`;
+      return `<div class="tile"><p class="tile-label">${label}</p><p class="tile-value">${formatMetric(shot[key], digits)}</p><p class="tile-unit">${unit || "&nbsp;"}${delta}</p></div>`;
     })
     .join("");
-  return kind === "tiles"
-    ? `<div class="tile-grid">${rows}</div>`
-    : `<div class="data-table">${rows}</div>`;
 }
 
-const EMMA_KIT = { shirt: "#1b4f72", trousers: "#243040", cap: "#14384f" };
-const TOUR_KITS = [
-  { shirt: "#b5523a", trousers: "#2a2422", cap: "#8a3b28" },
-  { shirt: "#2f7d57", trousers: "#1e2822", cap: "#1f5a3e" },
-  { shirt: "#3e6cb5", trousers: "#22262e", cap: "#2c4e86" },
-  { shirt: "#c4893a", trousers: "#2a261e", cap: "#8f6424" },
-  { shirt: "#7a4b8a", trousers: "#261e2a", cap: "#583468" },
-  { shirt: "#2a8f8a", trousers: "#1c2626", cap: "#1c6662" },
-  { shirt: "#a33d55", trousers: "#2a1e22", cap: "#7a2c3e" },
-  { shirt: "#5c6b32", trousers: "#22241c", cap: "#414c22" },
-];
+function numbersHtml(slot, shot, kind) {
+  const other = slot === "shell" ? null : otherShot(slot);
+  const showDelta = Boolean(other) && state.showDifference && bothNumeric();
+  if (kind === "tiles") return `<div class="tile-grid">${tileMarkup(slot, shot)}</div>`;
+  const heads = metricDefs.map(([, label]) => `<th scope="col">${label}</th>`).join("");
+  const cells = (useNormalized) =>
+    metricDefs
+      .map(([key, , unit, digits]) => {
+        const raw = useNormalized ? normalizedMetric(shot, key) : shot[key];
+        const comparable = showDelta && raw != null && (useNormalized ? normalizedMetric(other, key) : other[key]) != null;
+        const otherRaw = comparable ? (useNormalized ? normalizedMetric(other, key) : other[key]) : null;
+        const delta = comparable ? `<span class="delta">${formatDelta(raw - otherRaw, digits)}</span>` : "";
+        return `<td>${metricText(raw, unit, digits)}${delta}</td>`;
+      })
+      .join("");
+  return `
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr><th scope="col"></th>${heads}</tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Actual</th>${cells(false)}</tr>
+          <tr><th scope="row">Normalized</th>${cells(true)}</tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 
-/** Emma keeps one kit. Each tour player keeps one kit, chosen from their name. */
+const TOUR_KITS = ["rust", "green", "blue", "gold"];
+
+/** Emma keeps navy. Each tour player keeps one of the other kits, chosen from their name. */
 function kitFor(shot) {
-  if (shot.source !== "Tour") return EMMA_KIT;
+  if (shot.source !== "Tour") return "navy";
   const name = shot.tourPlayer || "Tour";
   let n = 0;
   for (let i = 0; i < name.length; i += 1) n = (Math.imul(n, 33) + name.charCodeAt(i)) >>> 0;
   return TOUR_KITS[n % TOUR_KITS.length];
 }
 
-function swingPose(progress) {
-  const p = Math.max(0, Math.min(1, Number(progress) || 0));
-  const back = Math.sin((Math.min(p, 0.42) / 0.42) * Math.PI);
-  const through = p > 0.42 ? (p - 0.42) / 0.58 : 0;
-  return {
-    arm: -back * 82 + through * 110,
-    torso: -back * 14 + through * 20,
-  };
+function stillMoment(progress) {
+  const p = Number(progress) || 0;
+  return p >= 0.2 && p < 0.65 ? "top" : "address";
 }
 
-function applySwing(slot, progress) {
-  const pose = swingPose(progress);
-  const torso = root.querySelector(`[data-swing-torso="${slot}"]`);
-  const arm = root.querySelector(`[data-swing-arm="${slot}"]`);
-  if (torso) {
-    const sign = Number(torso.dataset.swingSign) || 1;
-    const [x, y] = (torso.dataset.swingPivot || "0 0").split(" ");
-    torso.setAttribute("transform", `rotate(${(pose.torso * sign).toFixed(1)} ${x} ${y})`);
-  }
-  if (arm) {
-    const sign = Number(arm.dataset.swingSign) || 1;
-    const [x, y] = (arm.dataset.swingPivot || "0 0").split(" ");
-    arm.setAttribute("transform", `rotate(${(pose.arm * sign).toFixed(1)} ${x} ${y})`);
-  }
+function stillSrc(shot, angle, progress) {
+  const view = angle === "dl" ? "dl" : "fo";
+  return `images/video/${view}-${kitFor(shot)}-${stillMoment(progress)}.jpg`;
 }
 
 function videoScene(slot, shot, angle, progress) {
-  const kit = kitFor(shot);
-  const pose = swingPose(progress);
-  const sign = angle === "dl" ? -1 : 1;
-  const bay = angle === "dl" ? bayDownTheLine(slot, kit, pose, sign) : bayFrontOn(slot, kit, pose, sign);
   const label = angle === "dl" ? "Down the line" : "Front on";
-  return `<svg class="video-scene" viewBox="0 0 640 400" role="img" aria-label="${label} indoor range">${bay}</svg>`;
-}
-
-function bayFrontOn(slot, kit, pose, sign) {
-  const torso = (pose.torso * sign).toFixed(1);
-  const arm = (pose.arm * sign).toFixed(1);
-  return `
-    <rect width="640" height="400" fill="#14161c"/>
-    <rect x="0" y="0" width="70" height="250" fill="#101218"/>
-    <rect x="570" y="0" width="70" height="250" fill="#101218"/>
-    <rect x="70" y="0" width="500" height="36" fill="#1c1f28"/>
-    <rect x="120" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
-    <rect x="275" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
-    <rect x="430" y="8" width="90" height="8" rx="2" fill="#f2efe4" opacity="0.85"/>
-    <rect x="110" y="48" width="420" height="168" rx="6" fill="#243044"/>
-    <circle cx="320" cy="132" r="46" fill="none" stroke="#3d5168" stroke-width="2"/>
-    <circle cx="320" cy="132" r="22" fill="none" stroke="#3d5168" stroke-width="2"/>
-    <circle cx="320" cy="132" r="4" fill="#6d849c"/>
-    <polygon points="0,230 640,230 640,400 0,400" fill="#2a2c31"/>
-    <rect x="210" y="248" width="220" height="152" rx="8" fill="#1b3a30"/>
-    <g class="bay-player" transform="translate(318 300)">
-      <ellipse cx="4" cy="36" rx="46" ry="10" fill="#000" opacity="0.35"/>
-      <rect x="-22" y="0" width="16" height="48" rx="6" fill="${kit.trousers}"/>
-      <rect x="8" y="0" width="16" height="48" rx="6" fill="${kit.trousers}"/>
-      <rect x="-24" y="40" width="20" height="8" rx="2" fill="#161616"/>
-      <rect x="6" y="40" width="20" height="8" rx="2" fill="#161616"/>
-      <g data-swing-torso="${slot}" data-swing-sign="${sign}" data-swing-pivot="0 -20" transform="rotate(${torso} 0 -20)">
-        <rect x="-26" y="-78" width="52" height="64" rx="12" fill="${kit.shirt}"/>
-        <rect x="-26" y="-78" width="18" height="64" rx="12" fill="#000" opacity="0.16"/>
-        <circle cx="0" cy="-98" r="16" fill="#e8c4a8"/>
-        <path d="M-17 -104 Q0 -124 17 -104 L15 -94 Q0 -108 -15 -94 Z" fill="${kit.cap}"/>
-        <g data-swing-arm="${slot}" data-swing-sign="${sign}" data-swing-pivot="-8 -58" transform="rotate(${arm} -8 -58)">
-          <rect x="-14" y="-64" width="12" height="34" rx="6" fill="${kit.shirt}"/>
-          <line x1="-8" y1="-32" x2="-36" y2="10" stroke="#d5d8de" stroke-width="3" stroke-linecap="round"/>
-          <rect x="-48" y="6" width="18" height="7" rx="1" fill="#f2f2f2" transform="rotate(-28 -39 10)"/>
-        </g>
-      </g>
-      <circle cx="-24" cy="22" r="4.5" fill="#f7f7f7"/>
-    </g>
-  `;
-}
-
-function bayDownTheLine(slot, kit, pose, sign) {
-  const torso = (pose.torso * sign).toFixed(1);
-  const arm = (pose.arm * sign).toFixed(1);
-  return `
-    <rect width="640" height="400" fill="#14161c"/>
-    <polygon points="70,400 570,400 430,150 210,150" fill="#23262c"/>
-    <polygon points="248,400 392,400 356,214 284,214" fill="#1b3a30"/>
-    <line x1="320" y1="392" x2="320" y2="186" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
-    <polygon points="210,150 430,150 470,36 170,36" fill="#101218"/>
-    <rect x="236" y="52" width="168" height="98" rx="4" fill="#243044"/>
-    <circle cx="320" cy="102" r="28" fill="none" stroke="#3d5168" stroke-width="2"/>
-    <circle cx="320" cy="102" r="12" fill="none" stroke="#3d5168" stroke-width="2"/>
-    <circle cx="320" cy="102" r="3" fill="#6d849c"/>
-    <rect x="150" y="0" width="340" height="22" fill="#1c1f28"/>
-    <rect x="250" y="4" width="140" height="7" rx="2" fill="#f2efe4" opacity="0.8"/>
-    <g class="bay-player" transform="translate(320 292)">
-      <ellipse cx="0" cy="48" rx="54" ry="12" fill="#000" opacity="0.35"/>
-      <rect x="-18" y="8" width="14" height="52" rx="6" fill="${kit.trousers}"/>
-      <rect x="6" y="8" width="14" height="52" rx="6" fill="${kit.trousers}"/>
-      <rect x="-20" y="52" width="18" height="8" rx="2" fill="#161616"/>
-      <rect x="4" y="52" width="18" height="8" rx="2" fill="#161616"/>
-      <g data-swing-torso="${slot}" data-swing-sign="${sign}" data-swing-pivot="0 -8" transform="rotate(${torso} 0 -8)">
-        <rect x="-28" y="-70" width="56" height="78" rx="14" fill="${kit.shirt}"/>
-        <rect x="6" y="-70" width="22" height="78" rx="12" fill="#000" opacity="0.14"/>
-        <circle cx="0" cy="-92" r="18" fill="#e8c4a8"/>
-        <path d="M-18 -98 Q0 -120 18 -98 L18 -88 Q0 -102 -18 -88 Z" fill="${kit.cap}"/>
-        <g data-swing-arm="${slot}" data-swing-sign="${sign}" data-swing-pivot="4 -28" transform="rotate(${arm} 4 -28)">
-          <rect x="-2" y="-40" width="14" height="26" rx="6" fill="${kit.shirt}"/>
-          <line x1="6" y1="-16" x2="28" y2="24" stroke="#d5d8de" stroke-width="3" stroke-linecap="round"/>
-          <rect x="22" y="20" width="16" height="6" rx="1" fill="#f2f2f2" transform="rotate(18 30 23)"/>
-        </g>
-      </g>
-      <circle cx="34" cy="28" r="4" fill="#f7f7f7"/>
-    </g>
-  `;
+  return `<img class="video-still" data-video-still="${slot}" src="${stillSrc(shot, angle, progress)}" alt="${label} indoor range">`;
 }
 
 function golferSvg(shot) {
@@ -895,7 +1173,7 @@ function golferSvg(shot) {
 }
 
 function chevron(direction) {
-  const turn = { right: 0, down: 90, left: 180 }[direction];
+  const turn = { right: 0, down: 90, left: 180, up: -90 }[direction];
   return `<svg class="chevron" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(${turn}deg)"><path d="M6 3.5 L10.5 8 L6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
@@ -1051,10 +1329,17 @@ function debugHtml() {
                 </div>
               </div>
               <div class="dbg-grp">
-                ${dbgLabel("View selector", "Chips are separate rounded pills. Segmented joins the six views into one control with equal-width options. Only the look of the view switch changes. Each slot keeps its current view.")}
+                ${dbgLabel("View selector", "Segmented is the default and joins the six views into one control with equal-width options. Chips are separate rounded pills. Only the look of the view switch changes. Each slot keeps its current view.")}
                 <div class="seg">
-                  <button class="${state.viewStyle === "chips" ? "on" : ""}" type="button" data-action="view-style" data-style-value="chips">Chips</button>
                   <button class="${state.viewStyle === "segmented" ? "on" : ""}" type="button" data-action="view-style" data-style-value="segmented">Segmented</button>
+                  <button class="${state.viewStyle === "chips" ? "on" : ""}" type="button" data-action="view-style" data-style-value="chips">Chips</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Panel style", "Flat is the default. Slots and other content panels keep a border but have square corners and no padding around them, so the views get more room. Rounded brings back the rounded corners and padding. Buttons, view switches and the video still do not change.")}
+                <div class="seg">
+                  <button class="${state.panelStyle === "flat" ? "on" : ""}" type="button" data-action="panel-style" data-panel-style="flat">Flat</button>
+                  <button class="${state.panelStyle === "rounded" ? "on" : ""}" type="button" data-action="panel-style" data-panel-style="rounded">Rounded</button>
                 </div>
               </div>
               <div class="dbg-grp">
@@ -1072,17 +1357,25 @@ function debugHtml() {
                 </div>
               </div>
               <div class="dbg-grp">
-                ${dbgLabel("Studio frame", "Hides in compare shows the Performance Studio window on the main screen and removes it in Compare, so Compare can use the full window. Always on keeps that window around both screens, so Compare has less height. Nothing in the window can be clicked.")}
-                <div class="seg">
-                  <button class="${state.frameStyle === "session" ? "on" : ""}" type="button" data-action="frame-style" data-frame-style="session">Hides in compare</button>
-                  <button class="${state.frameStyle === "always" ? "on" : ""}" type="button" data-action="frame-style" data-frame-style="always">Always on</button>
-                </div>
-              </div>
-              <div class="dbg-grp">
                 ${dbgLabel("Shot arrows", "Left puts both arrows on the left of Change shot. Either side puts one arrow on each side. Both still move to the shot above or below.")}
                 <div class="seg">
                   <button class="${state.shotNavStyle === "left" ? "on" : ""}" type="button" data-action="shot-nav" data-nav-style="left">Left</button>
                   <button class="${state.shotNavStyle === "split" ? "on" : ""}" type="button" data-action="shot-nav" data-nav-style="split">Either side</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Screen shape", "16:9 is the default wide frame. 4:3 is a taller frame. The prototype scales to fit the window and keeps that shape, with empty space around it when the window does not match.")}
+                <div class="seg">
+                  <button class="${state.screenRatio === "16-9" ? "on" : ""}" type="button" data-action="screen-ratio" data-ratio="16-9">16:9</button>
+                  <button class="${state.screenRatio === "4-3" ? "on" : ""}" type="button" data-action="screen-ratio" data-ratio="4-3">4:3</button>
+                </div>
+              </div>
+              <div class="dbg-grp">
+                ${dbgLabel("Typeface", "One typeface is used for the whole prototype, including the large numbers. Open Sans is the default.")}
+                <div class="seg">
+                  <button class="${state.fontFamily === "open-sans" ? "on" : ""}" type="button" data-action="font" data-font="open-sans">Open Sans</button>
+                  <button class="${state.fontFamily === "work-sans" ? "on" : ""}" type="button" data-action="font" data-font="work-sans">Work Sans</button>
+                  <button class="${state.fontFamily === "lora" ? "on" : ""}" type="button" data-action="font" data-font="lora">Lora</button>
                 </div>
               </div>
               <div class="dbg-grp">
@@ -1195,6 +1488,9 @@ root.addEventListener("click", (event) => {
     state.video[state.pickerSlot].playing = false;
     state.video[state.pickerSlot].progress = 0;
     state.pickerSlot = null;
+  } else if (action === "video-tiles") {
+    const slot = target.dataset.slot;
+    if (slot === "shell" || slot === "left" || slot === "right") state.videoTiles[slot] = !state.videoTiles[slot];
   } else if (action === "video-angle") {
     const clip = state.video[target.dataset.slot];
     const angle = target.dataset.angle;
@@ -1207,13 +1503,19 @@ root.addEventListener("click", (event) => {
     state.debugOpen = !state.debugOpen;
   } else if (action === "view-style") {
     state.viewStyle = target.dataset.styleValue;
+  } else if (action === "panel-style") {
+    const next = target.dataset.panelStyle;
+    if (next === "flat" || next === "rounded") state.panelStyle = next;
   } else if (action === "theme") {
     state.theme = target.dataset.themeValue;
   } else if (action === "hide-video") {
     state.hideShotsWithoutVideo = target.dataset.hideVideo === "on";
-  } else if (action === "frame-style") {
-    const next = target.dataset.frameStyle;
-    if (next === "session" || next === "always") state.frameStyle = next;
+  } else if (action === "screen-ratio") {
+    const next = target.dataset.ratio;
+    if (next === "16-9" || next === "4-3") state.screenRatio = next;
+  } else if (action === "font") {
+    const next = target.dataset.font;
+    if (next === "open-sans" || next === "work-sans" || next === "lora") state.fontFamily = next;
   } else if (action === "shot-nav") {
     const next = target.dataset.navStyle;
     if (next === "left" || next === "split") state.shotNavStyle = next;
@@ -1222,6 +1524,40 @@ root.addEventListener("click", (event) => {
     if (next === "icon" || next === "both" || next === "word") state.closeStyle = next;
   } else if (action === "diff") {
     state.showDifference = target.dataset.diff === "on";
+  } else if (action === "graph-category") {
+    const clip = state.graph[target.dataset.slot];
+    const next = target.dataset.category;
+    if (clip && (next === "ks" || next === "rotation" || next === "translation")) clip.category = next;
+  } else if (action === "graph-peaks") {
+    const clip = state.graph[target.dataset.slot];
+    if (clip) clip.peaksOpen = !clip.peaksOpen;
+  } else if (action === "graph-chip") {
+    const clip = state.graph[target.dataset.slot];
+    const key = target.dataset.key;
+    if (clip && key && clip.category !== "ks") {
+      const list = clip.category === "rotation" ? clip.rotation : clip.translation;
+      const index = list.indexOf(key);
+      if (index >= 0) list.splice(index, 1);
+      else list.push(key);
+    }
+  } else if (action === "graph-segment") {
+    const clip = state.graph[target.dataset.slot];
+    const segment = target.dataset.segment;
+    if (clip && segment && clip.category !== "ks") {
+      const ids = paramDefs(clip.category, segment).map((item) => paramKey(segment, item.id));
+      const list = clip.category === "rotation" ? clip.rotation : clip.translation;
+      const allOn = ids.length > 0 && ids.every((id) => list.includes(id));
+      if (allOn) {
+        ids.forEach((id) => {
+          const index = list.indexOf(id);
+          if (index >= 0) list.splice(index, 1);
+        });
+      } else {
+        ids.forEach((id) => {
+          if (!list.includes(id)) list.push(id);
+        });
+      }
+    }
   } else if (action === "new-shot") {
     const shot = addSimulatedShot();
     if (state.screen !== "compare") {
@@ -1234,6 +1570,36 @@ root.addEventListener("click", (event) => {
     return;
   }
   render();
+});
+
+root.addEventListener("input", (event) => {
+  const scrub = event.target.closest("[data-graph-scrub]");
+  if (!scrub) return;
+  const slot = scrub.dataset.graphScrub;
+  const clip = state.graph[slot];
+  if (!clip) return;
+  clip.progress = Number(scrub.value);
+  const shot = clipShot(slot);
+  if (!shot) return;
+  const host = scrub.closest("[data-graph-slot]");
+  if (!host) return;
+  const series = visibleSeries(shot, clip);
+  const axis = axisFor(series, clip.category);
+  const x = graphX(clip.progress);
+  const line = host.querySelector(".graph-playhead");
+  if (line) {
+    line.setAttribute("x1", x);
+    line.setAttribute("x2", x);
+  }
+  series.forEach((item) => {
+    const node = host.querySelector(`[data-billboard="${item.key}"]`);
+    if (!node) return;
+    const value = sampleCurve(item, clip.progress);
+    const y = graphY(value, axis.min, axis.max);
+    node.setAttribute("transform", `translate(${(x + 8).toFixed(1)} ${(y - 14).toFixed(1)})`);
+    const text = node.querySelector("text");
+    if (text) text.textContent = `${Math.round(value)} ${item.unit}`;
+  });
 });
 
 root.addEventListener("change", (event) => {
@@ -1252,3 +1618,5 @@ if (radar) {
 }
 
 render();
+
+window.addEventListener("resize", fitStage);

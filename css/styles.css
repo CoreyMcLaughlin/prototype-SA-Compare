@@ -1,9 +1,9 @@
 /* Use semantic variables aligned with TDS where helpful; see .cursor/rules/design-system.mdc */
 
 :root {
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Oswald", var(--font-body);
+  --font-body: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Open Sans", ui-sans-serif, system-ui, sans-serif;
 
   --surface-page: #f6f6f6;
   --surface-card: #ffffff;
@@ -184,13 +184,67 @@
   box-sizing: border-box;
 }
 
+html[data-font="open-sans"] {
+  --font-body: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Open Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-font="work-sans"] {
+  --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-font="lora"] {
+  --font-body: "Lora", ui-serif, Georgia, serif;
+  --font-heading: "Lora", ui-serif, Georgia, serif;
+  --font-display: "Lora", ui-serif, Georgia, serif;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
   font-family: var(--font-body);
   font-size: var(--text-body);
   color: var(--content-primary);
+  background: #111;
+}
+
+#app {
+  height: 100%;
+}
+
+/* The prototype sits in a 16:9 or 4:3 stage and scales to the window. */
+.ratio-fit {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #111;
+}
+
+.ratio-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
   background: var(--surface-page);
+}
+
+.ratio-stage .app-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.ratio-stage .shotlist {
+  height: 100%;
+  min-height: 0;
 }
 
 button,
@@ -207,63 +261,8 @@ p {
 .app-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  min-height: 100vh;
-}
-
-/* Performance Studio window. The bars are the shared PNG; the black middle is the prototype. */
-.product-frame {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  min-height: 100vh;
-  overflow: hidden;
-  background: #000;
-}
-
-.product-frame-bar {
-  flex: none;
-  width: 100%;
-  pointer-events: none;
-  background-image: url("../images/sa-frame.png");
-  background-repeat: no-repeat;
-  background-size: 100% auto;
-}
-
-.product-frame-bar--top {
-  aspect-ratio: 1024 / 30;
-  background-position: top center;
-}
-
-.product-frame-bar--bottom {
-  aspect-ratio: 1024 / 34;
-  background-position: bottom center;
-}
-
-.product-frame-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.product-frame .app-shell {
-  flex: 1;
-  height: auto;
-  min-height: 0;
-}
-
-.product-frame .shell-body .shotlist {
   height: 100%;
   min-height: 0;
-}
-
-html[data-frame="on"] .dbg-fab {
-  bottom: calc(1.25rem + (100vw * 34 / 1024));
-}
-
-html[data-frame="on"] .dbg-pop {
-  bottom: calc(5.25rem + (100vw * 34 / 1024));
 }
 
 .topbar {
@@ -415,11 +414,35 @@ html[data-frame="on"] .dbg-pop {
 
 .compare-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: var(--split-left, 1fr) 0.75rem var(--split-right, 1fr);
   gap: var(--space-lg);
   flex: 1;
   min-height: 0;
   padding: var(--space-lg);
+}
+
+.compare-split {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.compare-split::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: var(--stroke-subtle);
+}
+
+.compare-split:hover::before,
+.compare-split:focus-visible::before {
+  background: var(--brand);
+  width: 3px;
 }
 
 /* Shot list (shell) */
@@ -427,7 +450,8 @@ html[data-frame="on"] .dbg-pop {
 .shotlist {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 3.5rem);
+  height: 100%;
+  min-height: 0;
   background: var(--surface-card);
   border-right: 1px solid var(--stroke-subtle);
 }
@@ -750,8 +774,184 @@ html[data-frame="on"] .dbg-pop {
 }
 
 /* Video, Graph, Trajectory and Dispersion share the slot height so switching views does not jump. */
-.video-view,
-.graph-view,
+.video-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--space-md);
+  min-height: 0;
+}
+
+.graph-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0;
+  min-height: 0;
+}
+
+.graph-tabs {
+  display: flex;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-md) 0;
+  border-bottom: 1px solid var(--stroke-subtle);
+}
+
+.graph-tab {
+  margin: 0;
+  padding: var(--space-sm) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--content-secondary);
+  font: 600 var(--text-label)/1.2 var(--font-body);
+  cursor: pointer;
+}
+
+.graph-tab.is-on {
+  color: var(--content-primary);
+  border-bottom-color: var(--brand);
+}
+
+.graph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--stroke-subtle);
+}
+
+.graph-segment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.graph-segment-name {
+  margin-right: var(--space-xs);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--content-primary);
+  font: 600 var(--text-helper)/1.2 var(--font-body);
+  cursor: pointer;
+}
+
+.graph-chip {
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--line, var(--stroke-subtle));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--content-primary);
+  font: 500 var(--text-helper)/1 var(--font-body);
+  cursor: pointer;
+}
+
+.graph-chip[data-dash="dashed"] {
+  border-style: dashed;
+}
+
+.graph-chip[data-dash="dotted"] {
+  border-style: dotted;
+}
+
+.graph-chip.is-on {
+  background: color-mix(in srgb, var(--line) 18%, transparent);
+}
+
+.graph-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-peaks {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-sm);
+  left: 3.4rem;
+  max-width: min(28rem, calc(100% - 4rem));
+  background: var(--surface-card);
+  border: 1px solid var(--stroke-subtle);
+}
+
+:root[data-panels="rounded"] .graph-peaks {
+  border-radius: var(--radius-card);
+}
+
+.graph-peaks-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  background: transparent;
+  color: var(--content-primary);
+  font: 600 var(--text-helper)/1.2 var(--font-body);
+  cursor: pointer;
+  text-align: left;
+}
+
+.graph-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.graph-badge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.graph-peak-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-helper);
+}
+
+.graph-peak-table th,
+.graph-peak-table td {
+  padding: 0.2rem 0.45rem;
+  border-top: 1px solid var(--stroke-subtle);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.graph-peak-table th:first-child {
+  text-align: left;
+}
+
+.graph-swatch {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+}
+
+.graph-scrub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+}
+
+.graph-scrub input {
+  flex: 1;
+}
+
 .trajectory-view,
 .dispersion-view {
   display: flex;
@@ -858,10 +1058,12 @@ html[data-frame="on"] .dbg-pop {
   background: var(--video-bg);
 }
 
-.video-scene {
+.video-still {
   flex: 1;
   width: 100%;
   min-height: 0;
+  object-fit: cover;
+  display: block;
 }
 
 .video-angle {
@@ -916,6 +1118,25 @@ html[data-frame="on"] .dbg-pop {
   align-items: center;
 }
 
+.video-tiles-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  padding: 0;
+}
+
+.video-tiles {
+  display: flex;
+  flex: none;
+  gap: var(--space-sm);
+  overflow-x: auto;
+}
+
+.video-tiles .tile {
+  flex: 0 0 8.5rem;
+}
+
 .video-track {
   flex: 1;
   height: 0.25rem;
@@ -965,15 +1186,39 @@ html[data-frame="on"] .dbg-pop {
   font-size: var(--text-helper);
 }
 
-.table-row {
-  justify-content: space-between;
-  padding: 0;
-  border-bottom: 1px solid var(--stroke-subtle);
-  font-size: var(--text-label);
+.data-table {
+  overflow-x: auto;
 }
 
-.table-value {
+.data-table table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--stroke-subtle);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table thead th {
+  color: var(--content-secondary);
+  font-weight: 600;
+  text-align: right;
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--surface-card);
 }
 
 /* Shot picker (opens over its own slot) */
@@ -1313,6 +1558,35 @@ html[data-frame="on"] .dbg-pop {
 .dbg-btn.danger:hover {
   color: #ff7a45;
   border-color: rgba(236, 105, 26, 0.55);
+}
+
+/* Panel style. Flat is the default: border only, square corners, no padding around the panels.
+   Rounded keeps the radius and padding above. */
+:root[data-panels="flat"] .compare-body,
+:root[data-panels="flat"] .shell-stage {
+  padding: 0;
+}
+
+:root[data-panels="flat"] .compare-body {
+  gap: 0;
+}
+
+:root[data-panels="flat"] .slot,
+:root[data-panels="flat"] .picker,
+:root[data-panels="flat"] .compare-shotlist {
+  border-radius: 0;
+}
+
+:root[data-panels="flat"] .slot-view {
+  padding: 0;
+}
+
+:root[data-panels="flat"] .slot-empty .picker {
+  inset: 0;
+}
+
+:root[data-panels="flat"] .picker {
+  inset: 4.5rem 0 0;
 }
 
 @media (max-width: 72rem) {
