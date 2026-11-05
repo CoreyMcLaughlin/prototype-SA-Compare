@@ -1434,6 +1434,18 @@ p {
   overflow: auto;
 }
 
+.tour-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--surface-card);
+}
+
+.tour-search-empty {
+  padding: var(--space-md) var(--space-lg);
+}
+
 .picker-row {
   width: 100%;
   align-items: center;

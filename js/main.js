@@ -52,6 +52,7 @@ const state = {
   historySessionId: null,
   tourPlayerId: null,
   tourOpen: { Driver: false, Iron: false },
+  tourQuery: "",
   closeStyle: "icon",
   showDifference: false,
   theme: "dark",
@@ -137,6 +138,7 @@ function resetAll() {
   state.historySessionId = null;
   state.tourPlayerId = null;
   state.tourOpen = { Driver: false, Iron: false };
+  state.tourQuery = "";
   state.closeStyle = "icon";
   state.showDifference = false;
   state.theme = "dark";
@@ -511,7 +513,6 @@ function shellHtml() {
           </div>
           <div class="shotlist-bottom">
             <button class="button button--primary compare-launch" type="button" data-action="compare">Compare</button>
-            <input class="field" disabled placeholder="Search shots" aria-label="Search shots" />
           </div>
         </aside>
         <section class="shell-stage" aria-label="Selected shot">
@@ -565,9 +566,6 @@ function compareSideListHtml() {
         <div class="shotlist-scroll">
           ${listMetricHtml()}
           ${sessionShotRowsHtml()}
-        </div>
-        <div class="shotlist-bottom">
-          <input class="field" disabled placeholder="Search shots" aria-label="Search shots" />
         </div>
       </aside>
     </div>
@@ -688,7 +686,7 @@ function videoHtml(slot, shot) {
         </div>
         <button class="icon-button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}" aria-label="${clip.playing ? "Pause" : "Play"}">${mediaIcon(clip.playing)}</button>
         <div class="video-track"><span data-video-bar="${slot}" style="width:${clip.progress * 100}%"></span></div>
-        <button class="button video-tiles-toggle" type="button" data-action="video-tiles" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}" aria-label="${open ? "Hide data tiles" : "Show data tiles"}">${chevron(open ? "up" : "down")}</button>
+        <button class="button video-tiles-toggle" type="button" data-action="video-tiles" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}" aria-label="${open ? "Hide data tiles" : "Show data tiles"}">${chevron(open ? "down" : "up")}</button>
       </div>
       ${open ? `<div class="video-tiles">${tileMarkup(slot, shot)}</div>` : ""}
     </div>
@@ -1263,22 +1261,49 @@ function pickerRows(currentId) {
   `;
 }
 
+function tourSearchField() {
+  return `
+    <div class="tour-search">
+      <input class="field" type="search" data-tour-search value="${esc(state.tourQuery)}" placeholder="Search players, clubs or shots" aria-label="Search players, clubs or shots" />
+    </div>
+  `;
+}
+
+function tourClubGroup(shot) {
+  return shot.club === "Driver" ? "Driver" : "Iron";
+}
+
+function tourShotMatches(shot, query) {
+  if (!query) return false;
+  return [shot.club, shot.label, tourClubGroup(shot)].join(" ").toLowerCase().includes(query);
+}
+
+function tourPlayerRow(item) {
+  return `
+    <button class="picker-session-row" type="button" data-action="tour-player" data-player="${item.id}">
+      <span class="picker-session-copy">
+        <span>${esc(item.name)}</span>
+        <span class="helper-text">${item.shots.length} ${item.shots.length === 1 ? "shot" : "shots"}</span>
+      </span>
+      ${chevron("right")}
+    </button>
+  `;
+}
+
 function tourRows(currentId) {
   const person = tourPlayers.find((item) => item.id === state.tourPlayerId);
   if (!person) {
-    return tourPlayers
-      .map(
-        (item) => `
-          <button class="picker-session-row" type="button" data-action="tour-player" data-player="${item.id}">
-            <span class="picker-session-copy">
-              <span>${esc(item.name)}</span>
-              <span class="helper-text">${item.shots.length} ${item.shots.length === 1 ? "shot" : "shots"}</span>
-            </span>
-            ${chevron("right")}
-          </button>
-        `,
-      )
-      .join("");
+    const query = state.tourQuery.trim().toLowerCase();
+    const people = tourPlayers.filter((item) => item.name.toLowerCase().includes(query));
+    const shots = query
+      ? tourPlayers.flatMap((item) => item.shots.filter((shot) => tourShotMatches(shot, query)).map((shot) => ({ shot, name: item.name })))
+      : [];
+    const playerRows = people.map((item) => tourPlayerRow(item)).join("");
+    const shotRows = shots.map(({ shot, name }) => shotRow(shot, currentId, name)).join("");
+    const rows = playerRows || shotRows
+      ? `${playerRows}${shotRows}`
+      : `<p class="helper-text tour-search-empty">No matches</p>`;
+    return `${tourSearchField()}${rows}`;
   }
   const groups = [
     ["Driver", person.shots.filter((shot) => shot.club === "Driver")],
@@ -1592,6 +1617,23 @@ root.addEventListener("click", (event) => {
 });
 
 root.addEventListener("input", (event) => {
+  const search = event.target.closest("[data-tour-search]");
+  if (search) {
+    state.tourQuery = search.value;
+    const caret = search.selectionStart;
+    const list = search.closest(".picker-list");
+    const listTop = list ? list.scrollTop : 0;
+    render();
+    const next = root.querySelector("[data-tour-search]");
+    if (next) {
+      next.focus();
+      const end = Math.min(caret ?? next.value.length, next.value.length);
+      next.setSelectionRange(end, end);
+      const nextList = next.closest(".picker-list");
+      if (nextList) nextList.scrollTop = listTop;
+    }
+    return;
+  }
   const scrub = event.target.closest("[data-graph-scrub]");
   if (!scrub) return;
   const slot = scrub.dataset.graphScrub;
