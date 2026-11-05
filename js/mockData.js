@@ -11,9 +11,9 @@ export const metricDefs = [
   ["launchDirection", "Launch direction", "°", 1],
   ["spinRate", "Spin rate", "rpm", 0],
   ["spinAxis", "Spin axis", "°", 1],
-  ["carry", "Carry", "yd", 0],
-  ["total", "Total", "yd", 0],
-  ["height", "Height", "yd", 0],
+  ["carry", "Carry", "yds", 0],
+  ["total", "Total", "yds", 0],
+  ["height", "Height", "yds", 0],
   ["landingAngle", "Landing angle", "°", 1],
   ["clubSpeed", "Club speed", "mph", 0],
   ["attackAngle", "Attack angle", "°", 1],
@@ -126,8 +126,18 @@ const currentShots = block("Pitching wedge", 10)
   .map((club, index) => shotFromClub(makeShot, "ew-26", club, index + 1, currentRng));
 
 // Shot 8 was left out on purpose. Shot 33 was not captured. Every other shot in this range has a video.
+// cameraAngles is how many cameras recorded the shot. Most are one. A few are two. Shot 37 is the rare third.
+const extraAngles = {
+  "Shot 4": 2,
+  "Shot 18": 2,
+  "Shot 28": 2,
+  "Shot 37": 3,
+  "Shot 39": 2,
+  "Shot 41": 2,
+};
 for (const shot of currentShots) {
   shot.hasVideo = shot.label !== "Shot 8" && shot.label !== "Shot 33";
+  shot.cameraAngles = shot.hasVideo ? extraAngles[shot.label] || 1 : 0;
 }
 
 function historyShot(session, partial) {
@@ -195,6 +205,7 @@ function tourShotFor(name, slug, club, label, index, rng) {
   shot.clubSpeed += club === "Driver" ? 12 : 6;
   shot.label = label;
   shot.hasVideo = true;
+  shot.cameraAngles = 1;
   shot.flight = flight(shot.carry, shot.height, shot.offline);
   return shot;
 }
@@ -215,6 +226,20 @@ export const tourPlayers = tourNames.map((name, playerIndex) => {
   }
   return { id: slug, name, shots };
 }).sort((a, b) => a.name.localeCompare(b.name));
+
+// A few tour shots were filmed from a second camera. Everyone else stays on one angle.
+const tourTwoAngles = new Set([
+  "scottie-scheffler",
+  "rory-mcilroy",
+  "jon-rahm",
+  "xander-schauffele",
+  "nelly-korda",
+]);
+for (const person of tourPlayers) {
+  if (!tourTwoAngles.has(person.id)) continue;
+  const shot = person.shots[Math.min(1, person.shots.length - 1)];
+  if (shot && shot.hasVideo) shot.cameraAngles = 2;
+}
 
 export const tourShots = tourPlayers.flatMap((person) => person.shots);
 
@@ -452,5 +477,5 @@ export function formatDelta(value, digits) {
 export function offlineLabel(yards) {
   const amount = Math.abs(Math.round(yards));
   if (amount === 0) return "On target";
-  return yards > 0 ? `${amount} yd right` : `${amount} yd left`;
+  return yards > 0 ? `${amount} yds right` : `${amount} yds left`;
 }

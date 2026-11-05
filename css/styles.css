@@ -39,12 +39,19 @@
   --shadow-dialog: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.1);
 
   /* Type scale in rem so it follows the reader's browser text-size setting.
-     Never set a px font-size on :root or html — that locks the scale. */
-  --text-page-title: 1.75rem; /* 28px */
-  --text-section-title: 1.125rem; /* 18px */
+     Never set a px font-size on :root or html — that locks the scale.
+     Page title 28, measured numbers 20, section title 18, body 16, label 14, helper 12. */
+  --text-page-title: 1.75rem; /* 28px — page and slot titles */
+  --text-stat: 1.25rem; /* 20px — measured numbers. Above body, below the title */
+  --text-section-title: 1.125rem; /* 18px — section titles */
   --text-body: 1rem; /* 16px — body copy, inputs, buttons */
   --text-label: 0.875rem; /* 14px — labels, table cells, nav */
-  --text-helper: 0.75rem; /* 12px — helper text, counters, meta. Smallest allowed */
+  --text-helper: 0.75rem; /* 12px — helper text and captions. Smallest allowed */
+  --text-display: var(--text-stat);
+  --text-h1: var(--text-page-title);
+  --text-h2: var(--text-section-title);
+  --text-h3: var(--text-body);
+  --text-caption: var(--text-helper);
 
   --control-height: 2.5rem; /* 40px — inputs, buttons, icon buttons */
   --row-height: 3rem; /* 48px — table and menu rows */
@@ -126,18 +133,34 @@
   opacity: 0.45;
 }
 
-.icon-button {
+.icon-button,
+button:has(> svg:only-child) {
   display: grid;
   place-items: center;
-  width: var(--control-height);
-  height: var(--control-height);
+  flex: none;
+  box-sizing: border-box;
+  width: var(--icon-button-size, var(--control-height));
+  height: var(--icon-button-size, var(--control-height));
+  min-width: var(--icon-button-size, var(--control-height));
+  max-width: var(--icon-button-size, var(--control-height));
+  min-height: var(--icon-button-size, var(--control-height));
+  aspect-ratio: 1;
   padding: 0;
+}
+
+.icon-button {
   border: 0;
   border-radius: var(--radius-control);
   font: 500 var(--text-body)/1.25 var(--font-body);
   color: var(--content-primary);
   background: var(--surface-neutral);
   cursor: pointer;
+}
+
+.icon-button:disabled {
+  color: var(--content-placeholder);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .icon-button svg {
@@ -220,9 +243,11 @@ body {
   height: 100%;
 }
 
-/* The prototype sits in a 16:9 or 4:3 stage and scales to the window. */
+/* The prototype takes the largest 16:9 or 4:3 frame that fits the window.
+   Text keeps its size; the layout inside reflows to the frame width. */
 .ratio-fit {
-  position: relative;
+  display: grid;
+  place-items: center;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -230,11 +255,27 @@ body {
 }
 
 .ratio-stage {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: top left;
+  --ratio: 16 / 9;
+  container: stage / inline-size;
+  position: relative;
+  width: min(100vw, calc(100vh * var(--ratio)));
+  aspect-ratio: var(--ratio);
+  max-height: 100vh;
+  overflow: hidden;
   background: var(--surface-page);
+}
+
+:root[data-ratio="4-3"] .ratio-stage {
+  --ratio: 4 / 3;
+}
+
+/* Below this a shaped frame would be too short to use, so fill the window. */
+@media (max-width: 60rem), (max-height: 34rem) {
+  .ratio-stage {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto;
+  }
 }
 
 .ratio-stage .app-shell {
@@ -267,27 +308,36 @@ p {
 
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-lg);
   min-height: 3.5rem;
-  /* Left padding leaves room for the shot tracker's status dot. */
-  padding: var(--space-md) var(--space-lg) var(--space-md) 3rem;
+  padding: var(--space-md) var(--space-lg);
   background: var(--surface-card);
   border-bottom: 1px solid var(--stroke-subtle);
 }
 
+/* The single-shot header is one centred group: product, player, date. */
+.app-shell > .topbar {
+  justify-content: center;
+}
+
+.app-shell > .topbar .topbar-session {
+  margin-left: 0;
+}
+
 .topbar-product {
-  font-size: var(--text-label);
+  font-size: var(--text-section-title);
   font-weight: 600;
 }
 
-.topbar-player,
-.topbar-session {
+.topbar-player {
   color: var(--content-secondary);
   font-size: var(--text-label);
 }
 
 .topbar-session {
+  color: #ffffff;
+  font-size: var(--text-label);
   margin-left: auto;
 }
 
@@ -351,6 +401,7 @@ p {
 }
 
 .compare-frame {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -433,9 +484,8 @@ p {
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 2px;
+  width: 1px;
   transform: translateX(-50%);
-  border-radius: 1px;
   background: var(--stroke-subtle);
 }
 
@@ -510,7 +560,7 @@ p {
   background: var(--surface-card);
   color: var(--content-primary);
   font: inherit;
-  font-size: var(--text-helper);
+  font-size: var(--text-label);
 }
 
 .club-group-label,
@@ -548,8 +598,42 @@ p {
 }
 
 .shot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   width: 100%;
   font-size: var(--text-label);
+}
+
+.shot-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.shot-camera {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.video-count {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--space-xs));
+  transform: translateY(-50%);
+  color: var(--content-secondary);
+  font-size: var(--text-label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .shot-row.is-selected,
@@ -572,21 +656,17 @@ p {
 .ball-dot[data-club="pitching-wedge"] { background: var(--club-pitching-wedge); }
 .ball-dot[data-club="radar"] { background: var(--club-radar); }
 
-.shot-figures {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-left: auto;
-}
-
 .shot-carry {
+  justify-self: end;
   font-family: var(--font-display);
-  font-size: var(--text-section-title);
+  font-size: var(--text-stat);
+  white-space: nowrap;
 }
 
 .video-mark {
-  width: 1rem;
-  height: 1rem;
+  display: block;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--content-secondary);
 }
 
@@ -650,8 +730,10 @@ p {
 .stage-carry span,
 .tile-value,
 .traj-readout span {
-  font-size: var(--text-page-title);
+  font-size: var(--text-stat);
   font-weight: 500;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 /* Compare slots */
@@ -680,6 +762,12 @@ p {
   justify-items: start;
   max-width: 22rem;
   padding: var(--space-section);
+}
+
+.empty-copy .helper-text {
+  font-size: var(--text-body);
+  color: var(--content-secondary);
+  line-height: 1.4;
 }
 
 .slot-head {
@@ -715,7 +803,9 @@ p {
 
 .slot-club {
   margin: 0;
-  font-size: var(--text-section-title);
+  font-size: var(--text-page-title);
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .view-switch {
@@ -729,7 +819,7 @@ p {
   min-height: 2rem;
   padding: 0 var(--space-md);
   border-radius: 999px;
-  font-size: var(--text-helper);
+  font-size: var(--text-label);
   font-weight: 500;
 }
 
@@ -834,7 +924,7 @@ p {
   border: 0;
   background: transparent;
   color: var(--content-primary);
-  font: 600 var(--text-helper)/1.2 var(--font-body);
+  font: 600 var(--text-label)/1.2 var(--font-body);
   cursor: pointer;
 }
 
@@ -845,7 +935,7 @@ p {
   border-radius: 999px;
   background: transparent;
   color: var(--content-primary);
-  font: 500 var(--text-helper)/1 var(--font-body);
+  font: 500 var(--text-label)/1 var(--font-body);
   cursor: pointer;
 }
 
@@ -871,6 +961,16 @@ p {
   display: block;
   width: 100%;
   height: 100%;
+  font-family: var(--font-body);
+}
+
+.graph-svg text {
+  font-family: var(--font-body);
+  font-size: var(--text-helper);
+}
+
+.graph-svg .graph-empty {
+  font-size: var(--text-label);
 }
 
 .graph-peaks {
@@ -896,7 +996,7 @@ p {
   border: 0;
   background: transparent;
   color: var(--content-primary);
-  font: 600 var(--text-helper)/1.2 var(--font-body);
+  font: 600 var(--text-label)/1.2 var(--font-body);
   cursor: pointer;
   text-align: left;
 }
@@ -911,7 +1011,7 @@ p {
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
   color: #fff;
-  font-size: 0.7rem;
+  font-size: var(--text-helper);
   font-weight: 600;
 }
 
@@ -997,12 +1097,17 @@ p {
 
 .traj-pair figcaption,
 .video-label,
-.tile-label,
 .tile-unit,
 .dbg-cap,
 .dl {
   color: var(--content-secondary);
   font-size: var(--text-helper);
+}
+
+.tile-label {
+  color: var(--content-secondary);
+  font-size: var(--text-label);
+  font-weight: 600;
 }
 
 .traj-line,
@@ -1081,7 +1186,7 @@ p {
   border: 0;
   background: transparent;
   color: var(--content-secondary);
-  font: 600 var(--text-helper) / 1 var(--font-body);
+  font: 600 var(--text-label) / 1 var(--font-body);
   cursor: pointer;
 }
 
@@ -1120,9 +1225,16 @@ p {
 
 .video-tiles-toggle {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   width: var(--control-height);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  max-width: var(--control-height);
+  min-height: var(--control-height);
+  aspect-ratio: 1;
   padding: 0;
 }
 
@@ -1155,16 +1267,82 @@ p {
   max-width: 100%;
 }
 
+.dispersion-view {
+  --disp-rough: #314838;
+  --disp-fairway: #5e895b;
+  --disp-green: #8fb584;
+  --disp-tee: #d2c2a4;
+  --disp-line: rgba(246, 246, 246, 0.42);
+  --disp-label: rgba(246, 246, 246, 0.86);
+  --disp-shot-stroke: #f7f7f7;
+}
+
+.disp-rough {
+  fill: var(--disp-rough);
+}
+
+.disp-fairway {
+  fill: var(--disp-fairway);
+}
+
+.disp-green {
+  fill: var(--disp-green);
+  stroke: var(--disp-line);
+  stroke-width: 1.5;
+}
+
+.disp-tee {
+  fill: var(--disp-tee);
+}
+
+.disp-tee-peg {
+  fill: var(--disp-shot-stroke);
+}
+
+.disp-center,
+.disp-yard {
+  fill: none;
+  stroke: var(--disp-line);
+  stroke-width: 1;
+}
+
+.disp-center {
+  stroke-dasharray: 2 5;
+}
+
+.disp-yard-label {
+  fill: var(--disp-label);
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+.disp-pin {
+  fill: none;
+  stroke: var(--disp-shot-stroke);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+.disp-flag {
+  fill: var(--disp-shot-stroke);
+}
+
 .disp-target {
-  fill: var(--content-primary);
+  fill: #1c2b22;
 }
 
 .disp-shot {
   fill: var(--brand);
+  stroke: var(--disp-shot-stroke, #f7f7f7);
+  stroke-width: 2.5;
+  paint-order: stroke fill;
 }
 
 .disp-mate {
   fill: var(--mate-fill);
+  stroke: var(--disp-shot-stroke, #f7f7f7);
+  stroke-width: 1.5;
+  paint-order: stroke fill;
 }
 
 .tile-grid {
@@ -1346,7 +1524,8 @@ p {
 }
 
 .chevron,
-.icon-x {
+.icon-x,
+.icon-play {
   width: 1rem;
   height: 1rem;
   flex: none;
@@ -1365,9 +1544,17 @@ p {
 }
 
 .close-control--icon {
+  --icon-button-size: 2rem;
   justify-content: center;
+  flex: none;
+  box-sizing: border-box;
   width: 2rem;
   height: 2rem;
+  min-width: 2rem;
+  max-width: 2rem;
+  min-height: 2rem;
+  aspect-ratio: 1;
+  padding: 0;
 }
 
 .close-control:hover {
@@ -1401,10 +1588,19 @@ p {
 .dbg-fab {
   bottom: 1.25rem;
   z-index: 90;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
   width: 3.375rem;
   height: 3.375rem;
+  min-width: 3.375rem;
+  max-width: 3.375rem;
+  min-height: 3.375rem;
+  aspect-ratio: 1;
+  padding: 0;
   border-radius: 0.875rem;
-  font-size: 1.25rem;
+  font-size: var(--text-stat);
   text-align: center;
 }
 
@@ -1484,7 +1680,7 @@ p {
   border: 1px solid rgba(243, 246, 241, 0.45);
   border-radius: 50%;
   color: rgba(243, 246, 241, 0.7);
-  font-size: 0.75rem;
+  font-size: var(--text-helper);
   font-style: italic;
   font-weight: 600;
   line-height: 1;
@@ -1577,6 +1773,22 @@ p {
   border-radius: 0;
 }
 
+/* Shared edges already have a line: the header, the shot list, and the compare divider.
+   A second border on the slot or the picker sits on top of those and reads as a double rule. */
+:root[data-panels="flat"] .slot,
+:root[data-panels="flat"] .picker {
+  border: 0;
+  box-shadow: none;
+}
+
+:root[data-panels="flat"] .picker {
+  border-top: 1px solid var(--stroke-subtle);
+}
+
+:root[data-panels="flat"] .slot-empty .picker {
+  border-top: 0;
+}
+
 :root[data-panels="flat"] .slot-view {
   padding: 0;
 }
@@ -1589,7 +1801,8 @@ p {
   inset: 4.5rem 0 0;
 }
 
-@media (max-width: 72rem) {
+/* Layout follows the stage width, not the browser width. */
+@container stage (max-width: 72rem) {
   .shell-body {
     grid-template-columns: 16rem 1fr;
   }
@@ -1598,8 +1811,90 @@ p {
     --side-width: 16rem;
   }
 
-  .compare-body {
+  :root[data-panels="rounded"] .compare-body {
     gap: var(--space-sm);
     padding: var(--space-sm);
+  }
+}
+
+@container stage (max-width: 60rem) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: var(--space-xs);
+  }
+
+  .topbar-session {
+    margin-left: 0;
+  }
+
+  .slot-head {
+    flex-wrap: wrap;
+    padding: var(--space-md);
+  }
+
+  .view-switch {
+    padding: 0 var(--space-md) var(--space-sm);
+  }
+
+  :root[data-view-style="segmented"] .slot > .view-switch {
+    margin: 0 var(--space-md) var(--space-sm);
+    overflow-x: auto;
+  }
+
+  :root[data-view-style="segmented"] .slot > .view-switch .view-button {
+    flex: 1 0 auto;
+  }
+
+  .slot-view {
+    padding: 0 var(--space-md) var(--space-md);
+  }
+
+  .tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  }
+}
+
+/* Narrow: stack the two Compare views and the main screen's shot list above the shot. */
+@container stage (max-width: 48rem) {
+  .topbar-player {
+    display: none;
+  }
+
+  .shell-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(10rem, 35%) 1fr;
+  }
+
+  .shell-body > .shotlist {
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke-subtle);
+  }
+
+  .shell-body .shotlist-player {
+    display: none;
+  }
+
+  .compare-side {
+    --side-width: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+  }
+
+  .compare-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .compare-split {
+    display: none;
+  }
+
+  :root[data-panels="flat"] .compare-body .slot ~ .slot {
+    border-top: 1px solid var(--stroke-subtle);
+  }
+
+  .compare-shotlist {
+    width: min(18rem, calc(100cqw - 2rem));
   }
 }

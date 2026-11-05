@@ -1,6 +1,5 @@
 import {
   addSimulatedShot,
-  applyMeasurement,
   clearSimulatedShots,
   currentSession,
   currentShotsList,
@@ -186,7 +185,13 @@ function tickVideo() {
     const bar = root.querySelector(`[data-video-bar="${slot}"]`);
     const button = root.querySelector(`[data-video-toggle="${slot}"]`);
     if (bar) bar.style.width = `${clip.progress * 100}%`;
-    if (button) button.textContent = clip.playing ? "Pause" : "Play";
+    if (button) {
+      const label = clip.playing ? "Pause" : "Play";
+      if (button.getAttribute("aria-label") !== label) {
+        button.setAttribute("aria-label", label);
+        button.innerHTML = mediaIcon(clip.playing);
+      }
+    }
     const shot = clipShot(slot);
     const still = root.querySelector(`[data-video-still="${slot}"]`);
     if (shot && still) {
@@ -332,23 +337,6 @@ function mountVisualisers() {
   });
 }
 
-function stageSize() {
-  if (state.screenRatio === "4-3") return { w: 1440, h: 1080 };
-  return { w: 1440, h: 810 };
-}
-
-function fitStage() {
-  const stage = root.querySelector(".ratio-stage");
-  if (!stage) return;
-  const { w, h } = stageSize();
-  const scale = Math.min(window.innerWidth / w, window.innerHeight / h);
-  stage.style.width = `${w}px`;
-  stage.style.height = `${h}px`;
-  stage.style.transform = `scale(${scale})`;
-  stage.style.left = `${(window.innerWidth - w * scale) / 2}px`;
-  stage.style.top = `${(window.innerHeight - h * scale) / 2}px`;
-}
-
 function bindSplit() {
   const handle = root.querySelector(".compare-split");
   if (!handle) return;
@@ -396,6 +384,7 @@ function render() {
   document.documentElement.dataset.viewStyle = state.viewStyle;
   document.documentElement.dataset.panels = state.panelStyle;
   document.documentElement.dataset.font = state.fontFamily;
+  document.documentElement.dataset.ratio = state.screenRatio;
   const slide = slideShotList;
   slideShotList = false;
   parkVisualisers();
@@ -404,7 +393,6 @@ function render() {
   root.insertAdjacentHTML("beforeend", debugHtml());
   mountVisualisers();
   syncVideoTimer();
-  fitStage();
   bindSplit();
 
   if (page) {
@@ -439,8 +427,16 @@ function revealSelectedShot() {
   }
 }
 
-function videoMark() {
-  return `<svg class="video-mark" viewBox="0 0 16 16" role="img" aria-label="Video recorded"><rect x="1.5" y="4" width="9" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 6.8 L14.2 5 V11 L10.5 9.2 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+function videoMark(label) {
+  return `<svg class="video-mark" viewBox="0 0 16 16" role="img" aria-label="${label}"><rect x="1.5" y="4" width="9" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 6.8 L14.2 5 V11 L10.5 9.2 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function cameraCell(shot) {
+  if (!shot.hasVideo) return `<span class="shot-camera"></span>`;
+  const angles = Number(shot.cameraAngles) > 1 ? Number(shot.cameraAngles) : 1;
+  const label = angles > 1 ? `${angles} camera angles recorded` : "Video recorded";
+  const count = angles > 1 ? `<span class="video-count" aria-hidden="true">${angles}</span>` : "";
+  return `<span class="shot-camera">${count}${videoMark(label)}</span>`;
 }
 
 function noVideoHtml() {
@@ -463,7 +459,7 @@ function listMetricHtml() {
 }
 
 function listValue(shot) {
-  const def = metricDefs.find(([key]) => key === state.listMetric) || ["carry", "Carry", "yd", 0];
+  const def = metricDefs.find(([key]) => key === state.listMetric) || ["carry", "Carry", "yds", 0];
   const [key, , unit, digits] = def;
   const text = formatMetric(shot[key], digits);
   if (text === "–" || !unit) return text;
@@ -482,9 +478,9 @@ function sessionShotRowsHtml() {
       const on = shot.id === selectedId ? " is-selected" : "";
       return `
         <button class="shot-row${on}" type="button" data-action="select" data-shot="${shot.id}">
-          ${clubMark(shot.club)}
-          <span>${esc(shot.label)}</span>
-          <span class="shot-figures">${shot.hasVideo ? videoMark() : ""}<span class="shot-carry">${listValue(shot)}</span></span>
+          <span class="shot-name">${clubMark(shot.club)}<span>${esc(shot.label)}</span></span>
+          ${cameraCell(shot)}
+          <span class="shot-carry">${listValue(shot)}</span>
         </button>
       `;
     })
@@ -498,7 +494,7 @@ function shellHtml() {
       <header class="topbar">
         <p class="topbar-product">Shot Analysis</p>
         <p class="topbar-player">${esc(player.name)}</p>
-        <p class="topbar-session">${esc(currentSession.name)} · ${esc(currentSession.date)}</p>
+        <p class="topbar-session">${esc(currentSession.date)}</p>
       </header>
       <div class="shell-body">
         <aside class="shotlist">
@@ -597,7 +593,7 @@ function compareHtml(slide) {
             </div>
             <p class="topbar-product">Shot Analysis · Compare</p>
             <p class="topbar-player">${esc(player.name)}</p>
-            <p class="topbar-session">${esc(currentSession.name)} · ${esc(currentSession.date)}</p>
+            <p class="topbar-session">${esc(currentSession.date)}</p>
           </header>
           <div class="compare-body" style="--split-left:${state.compareSplit}fr; --split-right:${100 - state.compareSplit}fr">
             ${slotHtml("left")}
@@ -640,8 +636,8 @@ function slotHtml(slot) {
 
   const view = slotView(slot);
   const { atTop, atBottom } = stepEnds(shot);
-  const prev = `<button class="button" type="button" data-action="step" data-slot="${slot}" data-dir="prev" aria-label="Previous shot"${atTop ? " disabled" : ""}>${chevron("left")}</button>`;
-  const next = `<button class="button" type="button" data-action="step" data-slot="${slot}" data-dir="next" aria-label="Next shot"${atBottom ? " disabled" : ""}>${chevron("right")}</button>`;
+  const prev = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="prev" aria-label="Previous shot"${atTop ? " disabled" : ""}>${chevron("left")}</button>`;
+  const next = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="next" aria-label="Next shot"${atBottom ? " disabled" : ""}>${chevron("right")}</button>`;
   const change = `<button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>`;
   const arrows = state.shotNavStyle === "split"
     ? `${prev}${change}${next}`
@@ -690,7 +686,7 @@ function videoHtml(slot, shot) {
           <button type="button" data-action="video-angle" data-slot="${slot}" data-angle="fo" aria-label="Front on" aria-pressed="${angle === "fo" ? "true" : "false"}"${angle === "fo" ? " class=\"on\"" : ""}>FO</button>
           <button type="button" data-action="video-angle" data-slot="${slot}" data-angle="dl" aria-label="Down the line" aria-pressed="${angle === "dl" ? "true" : "false"}"${angle === "dl" ? " class=\"on\"" : ""}>DL</button>
         </div>
-        <button class="button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}">${clip.playing ? "Pause" : "Play"}</button>
+        <button class="icon-button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}" aria-label="${clip.playing ? "Pause" : "Play"}">${mediaIcon(clip.playing)}</button>
         <div class="video-track"><span data-video-bar="${slot}" style="width:${clip.progress * 100}%"></span></div>
         <button class="button video-tiles-toggle" type="button" data-action="video-tiles" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}" aria-label="${open ? "Hide data tiles" : "Show data tiles"}">${chevron(open ? "up" : "down")}</button>
       </div>
@@ -864,16 +860,16 @@ function graphChart(shot, clip) {
     .map((item) => {
       const value = sampleCurve(item, clip.progress);
       const y = graphY(value, axis.min, axis.max);
-      return `<g data-billboard="${item.key}" transform="translate(${(x + 8).toFixed(1)} ${(y - 14).toFixed(1)})"><rect width="78" height="18" rx="2" fill="var(--surface-card)" stroke="${item.color}" /><text x="6" y="13" fill="var(--content-primary)" font-size="11">${Math.round(value)} ${item.unit}</text></g>`;
+      return `<g data-billboard="${item.key}" transform="translate(${(x + 8).toFixed(1)} ${(y - 18).toFixed(1)})"><rect width="104" height="22" rx="2" fill="var(--surface-card)" stroke="${item.color}" /><text x="6" y="15" fill="var(--content-primary)">${Math.round(value)} ${item.unit}</text></g>`;
     })
     .join("");
   const ticks = axisTicks(axis)
-    .map((tick) => `<text x="4" y="${(tick.y + 4).toFixed(1)}" fill="var(--content-secondary)" font-size="11">${formatTick(tick.value, clip.category)}</text>`)
+    .map((tick) => `<text x="4" y="${(tick.y + 4).toFixed(1)}" fill="var(--content-secondary)">${formatTick(tick.value, clip.category)}</text>`)
     .join("");
   const pLabels = guides
-    .map(([label, t]) => `<text x="${graphX(t)}" y="492" text-anchor="middle" fill="var(--content-secondary)" font-size="11">${label}</text><line x1="${graphX(t)}" y1="${GRAPH_Y0}" x2="${graphX(t)}" y2="${GRAPH_Y1}" stroke="var(--stroke-subtle)" stroke-dasharray="2 4" />`)
+    .map(([label, t]) => `<text x="${graphX(t)}" y="492" text-anchor="middle" fill="var(--content-secondary)">${label}</text><line x1="${graphX(t)}" y1="${GRAPH_Y0}" x2="${graphX(t)}" y2="${GRAPH_Y1}" stroke="var(--stroke-subtle)" stroke-dasharray="2 4" />`)
     .join("");
-  const empty = series.length ? "" : `<text x="360" y="250" text-anchor="middle" fill="var(--content-secondary)" font-size="14">Turn on a parameter</text>`;
+  const empty = series.length ? "" : `<text class="graph-empty" x="360" y="250" text-anchor="middle" fill="var(--content-secondary)">Turn on a parameter</text>`;
   return `
     <svg class="graph-svg" viewBox="0 0 720 508" role="img" aria-label="Motion graph">
       <line x1="${GRAPH_X0}" y1="${graphY(0, axis.min, axis.max)}" x2="${GRAPH_X1}" y2="${graphY(0, axis.min, axis.max)}" stroke="var(--stroke-subtle)" />
@@ -980,7 +976,7 @@ function trajectoryBlock(slot, shot) {
   return `
     <div class="trajectory-view">
       <div class="trajectory-host" data-traj-slot="${slot}"></div>
-      <p class="traj-readout"><span>${shot.carry} yd</span> carry · <span>${shot.height} yd</span> apex</p>
+      <p class="traj-readout"><span>${shot.carry} yds</span> carry · <span>${shot.height} yds</span> apex</p>
     </div>
   `;
 }
@@ -1042,15 +1038,31 @@ function dispersionHtml(shot) {
   const fixedTargets = { Driver: 265, "7-iron": 165, "Pitching wedge": 115 };
   const target =
     fixedTargets[shot.club] || Math.round(marks.reduce((sum, m) => sum + m.carry, 0) / marks.length);
+  const yardLines = [];
+  for (let yds = 50; yds <= 400; yds += 50) {
+    const y = 140 - (yds - target) * 3;
+    if (y < 22 || y > 236) continue;
+    const yy = y.toFixed(1);
+    yardLines.push(
+      `<line x1="88" y1="${yy}" x2="192" y2="${yy}" class="disp-yard" />`,
+      `<text x="10" y="${yy}" class="disp-yard-label" dominant-baseline="middle" font-size="13">${yds}</text>`
+    );
+  }
   return `
     <div class="dispersion-view">
       <div class="view-stage">
-      <svg viewBox="0 0 280 280" role="img" aria-label="Dispersion of the shot against the target">
-        <circle cx="140" cy="140" r="88" class="disp-ring" />
-        <circle cx="140" cy="140" r="44" class="disp-ring" />
-        <line x1="140" y1="20" x2="140" y2="260" class="traj-ground" />
-        <line x1="20" y1="140" x2="260" y2="140" class="traj-ground" />
-        <circle cx="140" cy="140" r="5" class="disp-target" />
+      <svg viewBox="0 0 280 280" role="img" aria-label="Dispersion of the shot on a fairway">
+        <rect class="disp-rough" width="280" height="280" />
+        <path class="disp-fairway" d="M68 280 Q74 140 82 0 L198 0 Q206 140 212 280 Z" />
+        <line class="disp-center" x1="140" y1="8" x2="140" y2="248" />
+        ${yardLines.join("")}
+        <ellipse class="disp-green" cx="140" cy="140" rx="46" ry="28" />
+        <rect class="disp-tee" x="116" y="256" width="48" height="16" rx="2" />
+        <circle class="disp-tee-peg" cx="132" cy="264" r="1.8" />
+        <circle class="disp-tee-peg" cx="148" cy="264" r="1.8" />
+        <circle class="disp-target" cx="140" cy="140" r="3" />
+        <line class="disp-pin" x1="140" y1="140" x2="140" y2="126" />
+        <path class="disp-flag" d="M140 126 L153 130.5 L140 135 Z" />
         ${marks
           .map((item) => {
             const x = Math.max(12, Math.min(268, 140 + item.offline * 4));
@@ -1061,7 +1073,7 @@ function dispersionHtml(shot) {
           .join("")}
         </svg>
       </div>
-      <p class="traj-readout"><span>${shot.carry} yd</span> carry · ${esc(offlineLabel(shot.offline))}</p>
+      <p class="traj-readout"><span>${shot.carry} yds</span> carry · ${esc(offlineLabel(shot.offline))}</p>
     </div>
   `;
 }
@@ -1170,6 +1182,13 @@ function golferSvg(shot) {
       </g>
     </svg>
   `;
+}
+
+function mediaIcon(playing) {
+  if (playing) {
+    return `<svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.25 3.5 V12.5 M10.75 3.5 V12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  }
+  return `<svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 L12.5 8 L6 12.5 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
 function chevron(direction) {
@@ -1291,7 +1310,7 @@ function shotRow(shot, currentId, extra) {
       ${clubMark(shot.club)}
       <span class="picker-row-copy">
         <span>${esc(shot.club)} · ${esc(shot.label)}</span>
-        <span class="helper-text">${esc(detail)}${shot.carry} yd carry · ${shot.ballSpeed} mph</span>
+        <span class="helper-text">${esc(detail)}${shot.carry} yds carry · ${shot.ballSpeed} mph</span>
       </span>
     </button>
   `;
@@ -1364,14 +1383,14 @@ function debugHtml() {
                 </div>
               </div>
               <div class="dbg-grp">
-                ${dbgLabel("Screen shape", "16:9 is the default wide frame. 4:3 is a taller frame. The prototype scales to fit the window and keeps that shape, with empty space around it when the window does not match.")}
+                ${dbgLabel("Screen shape", "16:9 is the default wide frame. 4:3 is a taller frame. The prototype takes the largest frame of that shape that fits the window, with empty space around it when the window does not match. Text stays the same size and the layout rearranges itself to fit. On a narrow window the frame fills the whole window.")}
                 <div class="seg">
                   <button class="${state.screenRatio === "16-9" ? "on" : ""}" type="button" data-action="screen-ratio" data-ratio="16-9">16:9</button>
                   <button class="${state.screenRatio === "4-3" ? "on" : ""}" type="button" data-action="screen-ratio" data-ratio="4-3">4:3</button>
                 </div>
               </div>
               <div class="dbg-grp">
-                ${dbgLabel("Typeface", "One typeface is used for the whole prototype, including the large numbers. Open Sans is the default.")}
+                ${dbgLabel("Typeface", "One typeface is used for the whole prototype, including the large numbers. Titles, labels and numbers each keep their own size. Open Sans is the default.")}
                 <div class="seg">
                   <button class="${state.fontFamily === "open-sans" ? "on" : ""}" type="button" data-action="font" data-font="open-sans">Open Sans</button>
                   <button class="${state.fontFamily === "work-sans" ? "on" : ""}" type="button" data-action="font" data-font="work-sans">Work Sans</button>
@@ -1609,14 +1628,4 @@ root.addEventListener("change", (event) => {
   render();
 });
 
-/* Shot tracker: every radar shot lands in the current session, under "Radar". */
-const radar = document.querySelector("trackman-radar");
-if (radar) {
-  radar.addEventListener("trackman:measurement", (event) => {
-    if (applyMeasurement(event.detail)) render();
-  });
-}
-
 render();
-
-window.addEventListener("resize", fitStage);
