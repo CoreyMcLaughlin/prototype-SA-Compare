@@ -1,0 +1,75 @@
+# Supabase Setup
+
+## When to use this
+Only when the designer asks to "add a backend", "connect real data", or "set up a database".
+Most prototypes do not need this. If mock data works, use that instead.
+
+---
+
+## Rules
+- Keep the schema simple. Only create tables that are actually needed.
+- Use realistic Trackman seed data, not placeholder values
+- Do not set up authentication unless the prototype is specifically testing a login flow
+- Disable Row Level Security (RLS) for prototypes to keep things simple
+- Never commit API keys or project secrets to the repo
+- Add any local config file that holds keys to `.gitignore` before writing secrets
+
+---
+
+## Setup Process
+
+### 1. Ask the designer
+Before doing anything, ask:
+- "What data does this prototype need to store?"
+- "Do multiple users need to interact with the same data, or is this single user?"
+
+Keep the schema as simple as possible based on the answers.
+
+### 2. Add the Supabase client to a static prototype
+
+The default stack is plain HTML/CSS/JS. Choose one approach:
+
+**A) npm + local bundle (when you are comfortable adding a small toolchain)**  
+From the project root:
+```bash
+npm init -y
+npm install @supabase/supabase-js
+```
+Use a small bundler (e.g. `esbuild`) to produce a single `js/bundle.js` you load from `index.html`, **or** use Vite only for this project if the team agrees — the template does not require it by default.
+
+**B) ESM import from a CDN in `type="module"` scripts**  
+Import the client in `js/` from a trusted ESM CDN and call `createClient` in a dedicated module (e.g. `js/supabase.js`).
+
+### 3. Create the Supabase client
+Create `js/supabase.js` (or your bundled entry) that exports a configured client:
+
+```js
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Prototype only: load URL and anon key from a gitignored config module
+// the designer fills in — do not commit real keys.
+import { supabaseUrl, supabaseAnonKey } from "./config.local.js";
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+```
+
+Add `js/config.local.js` to `.gitignore`. Provide a `js/config.local.example.js` with empty strings and instructions for the designer to copy and fill in.
+
+### 4. Credentials
+Supabase: **Settings → API** — Project URL and `anon` public key.
+
+The designer pastes values into `config.local.js` (or you use Vercel environment variables only if a build step injects them). For a pure static upload to Vercel, the browser still needs the public anon key — treat it as public, but keep the file out of git if the team prefers not to store even public keys in the repo.
+
+### 5. Create tables and seed data
+Write SQL to create the tables and insert realistic seed data.
+Present the SQL to the designer and ask them to run it in the Supabase SQL editor before continuing.
+
+### 6. Verify the connection
+After credentials are added, test the connection with a simple read before building anything on top of it.
+
+---
+
+## Seed Data Guidelines
+- Use realistic Trackman values: distances in yards, speeds in mph, real-sounding player names
+- Include enough rows to make the UI feel real (minimum 5 to 10 rows per table)
+- Cover different statuses and states where relevant (e.g. active, inactive, pending)

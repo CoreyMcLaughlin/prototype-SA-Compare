@@ -1,0 +1,114 @@
+# Prototype Stack
+
+## Core Stack
+
+| Decision | Chosen | Alternative |
+|---|---|---|
+| Markup | HTML5 | — |
+| Styling | Plain CSS (`css/`) | SCSS only if the user asks |
+| Behaviour | JavaScript ES modules (`js/`) | TypeScript only if the user asks |
+| Package manager | None required | npm only if you add tooling (e.g. Supabase client) |
+| Database | None by default — mock data only | Supabase when explicitly requested (see supabase.mdc) |
+| Deployment | Vercel (static) | Any static host |
+
+---
+
+## Why These Choices
+
+- **HTML/CSS/JS** — minimal moving parts, fast to open and edit, easy for designers to reason about, no framework lock-in.
+- **ES modules** — clean `import`/`export` between `js/` files without a bundler; serve over a local static server (not `file://`) so modules load correctly.
+- **No database by default** — mock data is faster and enough for most user tests. If a prototype needs real data or persistence, follow the Supabase rule file.
+
+---
+
+## Project Structure
+
+```
+my-prototype/
+  index.html          ← entry HTML
+  css/                ← stylesheets
+  js/                 ← scripts and mock data
+  images/             ← public images and icons (Figma exports) — deploys
+  assets/             ← designer's private local files — never deploys
+  .cursor/
+    rules/
+```
+
+Do not add a root-level `public/` folder — Vercel treats a root `public/` as the whole site and the prototype breaks.
+
+---
+
+## Key Conventions
+
+**File naming**
+
+- HTML: `index.html` at root, or additional pages as `about.html`, etc.
+- CSS: `kebab-case.css` or `styles.css`
+- JS: `camelCase.js` for modules (`mockData.js`, `main.js`)
+
+**Styling**
+
+- Prefer CSS variables in `:root` for colours and fonts aligned with TDS (see design-system.mdc)
+- One primary stylesheet is fine; split by feature if it helps readability
+
+**Script loading**
+
+- Use `<script type="module" src="js/main.js">` in `index.html`
+- Local development must use a static HTTP server so ES modules work (`npx serve .`, `python3 -m http.server`, etc.)
+
+**Images and icons**
+
+- Anything you export from Figma or create yourself goes in `images/` — icons, logos, illustrations, UI screenshots. Subfolders like `images/icons/` are fine. Reference as `images/icons/close.svg`
+- `assets/` belongs to the designer. It is git-ignored and excluded from deploys, so never save files there — they would be missing on the live link
+- Read from `assets/` only when the designer points you at a file. If it needs to show in the UI, copy it into `images/` first
+- Never create a root-level `public/` folder
+
+---
+
+## Mock Data
+
+- Keep mock data in `js/mockData.js` or dedicated modules under `js/`
+- Use realistic Trackman values (distances in yards, speeds in mph, realistic player names)
+- Don't connect to real APIs unless the prototype specifically needs it
+
+---
+
+## What to Skip in Prototypes
+
+- **Authentication** — hardcode a mock user if needed
+- **Error handling** — happy path only unless the error state is what's being tested
+- **Loading states** — only add if relevant to the UX being tested
+- **Unit tests** — not needed for prototypes
+- **Performance optimisation** — don't worry about it
+
+The goal is something testable with users, not production-ready code.
+
+---
+
+## Common Commands
+
+```bash
+npx serve .         # Static server (pick an available tool)
+npx vercel          # Deploy static site to Vercel
+```
+
+---
+
+## Tone of Voice
+
+- Act as a senior full-stack developer and senior product designer
+- When writing or explaining code, assume the reader is a product designer — not a developer
+- TLDR only. Lead with the point. No preamble, no recap, no filler
+- Keep it designer-friendly and AI-slop free. Do not use words like leverage, robust, seamless, streamline, or elevate
+- Be short and to the point — no long explanations unless asked
+- Use short sentences, clear structure, no walls of text
+- When something needs a decision, present options clearly rather than assuming
+- Ask before assuming on anything product or data related
+
+---
+
+## Prototyping Intent
+
+- This is a design tool, not a production codebase — always optimise for speed and testability over perfection
+- When in doubt about scope, do less and ask
+- Prototypes should look like real Trackman products — not generic AI output

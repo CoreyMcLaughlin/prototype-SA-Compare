@@ -1,0 +1,55 @@
+---
+description: >-
+  Handoff documentation for prototypes. Apply when the user says create or
+  update the handoff documentation, or write the handoff doc. Follow
+  .cursor/templates/5. create-handoff.md and save output to
+  .cursor/documents/handoffs/.
+alwaysApply: true
+---
+
+# Cursor Rules: Handoff Documentation
+
+**Trigger:** user says "create the handoff documentation", "update the handoff documentation", "write the handoff doc", or similar.
+
+The handoff document is product-first. It exists so product can review the prototype and write user stories from what exists now, not from the original plan. It summarises the main user stories, how the prototype differs from the real product, the user paths, and the edge cases. It is not a second PRD.
+
+## Sources of truth (in order)
+
+1. What was actually built: the prototype code and how it behaves.
+2. Prior chat / Cursor session decisions: deviations, stubs, naming calls, test intent.
+3. PRD and task list: light backup only, to fill gaps or link. Do not restate or mirror them.
+
+## What to do
+
+1. Follow `.cursor/templates/5. create-handoff.md` exactly.
+2. Read the prototype and prior chat context first. Skim the PRD and task list only to fill gaps or link them. A missing PRD or task list is fine (concept path).
+3. If more than one PRD exists, ask which one(s) the handoff is for.
+4. Fill in everything you can from the build before asking the user anything.
+5. Give the reviewer links they can open: the deployed link (with `?pw=` if it exists), the local entry file, Figma, the PRD, and the task list. Use unchecked task list items to show what is left near the top.
+6. Say how you will know the learning goal worked (the success signals), so product can plan the test and write stories.
+7. Keep build status in the one "What's built" table. Do not repeat it in every section.
+8. Write edge cases as real user-facing situations and what the user sees, not developer notes.
+9. If a handoff file already exists in `.cursor/documents/handoffs/`, offer to update it in place. Do not create a duplicate.
+10. Save to `.cursor/documents/handoffs/handoff-[prd-file-name].md`. If there is no PRD, use a kebab-case slug from what was built.
+11. After saving, tell the user where it is and ask them to review it. If the PRD looks stale against the build, offer to update it.
+
+## Availability
+
+- Offered at the end of the prototype workflow (Step 7 wrap-up in `prototype-workflow.mdc`).
+- Available on demand after a prototype exists, even if there is no PRD (concept path).
+
+## Writing style
+
+- Write for a product manager, not a developer.
+- Use really simple, everyday language. A non-technical reader should understand every line.
+- No technical jargon or developer shorthand. Describe what the user sees and does, not how it is built. Avoid phrases like "not exercised in UI", "tab-local", or "hash deep-links"; say "you cannot do this yet", "only saved on this tab", "links that jump to a screen".
+- Be direct and short. No filler.
+- Do not use em dashes.
+- Do not use words like leverage, robust, seamless, streamline, or elevate.
+- Use real feature names and realistic values, not placeholders.
+
+## Do not
+
+- Do not change the prototype. This step only writes documentation.
+- Do not restate or mirror the PRD or task list. If it reads like a PRD, cut it.
+- Do not edit the PRD, task list, or an existing handoff unprompted. Ask first.
