@@ -17,6 +17,65 @@ import {
 } from "./mockData.js";
 
 const root = document.getElementById("app");
+const uploadedShots = new Map();
+
+function findShot(id) {
+  return uploadedShots.get(id) || getShot(id);
+}
+
+function isVideoFile(file) {
+  if (!file) return false;
+  if (file.type.startsWith("video/")) return true;
+  return /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
+}
+
+function acceptUpload(file) {
+  const slot = state.pickerSlot;
+  if (slot !== "left" && slot !== "right") return;
+  if (!isVideoFile(file)) {
+    state.uploadNote = "Use an mp4, mov, or webm.";
+    render();
+    return;
+  }
+  const id = `upload-${Date.now()}`;
+  const shot = {
+    id,
+    source: "Upload",
+    videoOnly: true,
+    hasVideo: true,
+    cameraAngles: 1,
+    club: "",
+    label: file.name.replace(/\.[^.]+$/, "") || file.name,
+    fileName: file.name,
+    url: URL.createObjectURL(file),
+  };
+  uploadedShots.set(id, shot);
+  state.uploadNote = "";
+  if (slot === "left") {
+    state.leftShotId = id;
+    state.leftView = "video";
+  } else {
+    state.rightShotId = id;
+    state.rightView = "video";
+  }
+  state.video[slot].playing = false;
+  state.video[slot].progress = 0;
+  state.pickerSlot = null;
+  render();
+}
+
+function downloadShotVideo(shot, slot) {
+  const link = document.createElement("a");
+  if (shot.videoOnly) {
+    link.href = shot.url;
+    link.download = shot.fileName || "video.mp4";
+  } else {
+    const clip = state.video[slot];
+    link.href = stillSrc(shot, clip?.angle, clip?.progress);
+    link.download = `${shot.label || shot.id}.jpg`;
+  }
+  link.click();
+}
 
 const freshClip = () => ({ playing: false, progress: 0, angle: "fo" });
 const freshVideo = () => ({
@@ -53,6 +112,7 @@ const state = {
   tourPlayerId: null,
   tourOpen: { Driver: false, Iron: false },
   tourQuery: "",
+  uploadNote: "",
   closeStyle: "icon",
   showDifference: false,
   theme: "dark",
@@ -84,11 +144,11 @@ function activeShotId() {
 
 function slotShot(slot) {
   const id = slot === "left" ? state.leftShotId : state.rightShotId;
-  return id ? getShot(id) : null;
+  return id ? findShot(id) : null;
 }
 
 function clipShot(slot) {
-  if (slot === "shell") return getShot(activeShotId());
+  if (slot === "shell") return findShot(activeShotId());
   return slotShot(slot);
 }
 
@@ -139,6 +199,9 @@ function resetAll() {
   state.tourPlayerId = null;
   state.tourOpen = { Driver: false, Iron: false };
   state.tourQuery = "";
+  state.uploadNote = "";
+  uploadedShots.forEach((shot) => URL.revokeObjectURL(shot.url));
+  uploadedShots.clear();
   state.closeStyle = "icon";
   state.showDifference = false;
   state.theme = "dark";
@@ -167,6 +230,26 @@ function stopVideo() {
     clearInterval(videoTimer);
     videoTimer = null;
   }
+}
+
+function bindUploadedVideos() {
+  root.querySelectorAll("[data-upload-video]").forEach((video) => {
+    const slot = video.dataset.uploadVideo;
+    const button = () => root.querySelector(`[data-video-toggle="${slot}"]`);
+    const setPlaying = (playing) => {
+      const control = button();
+      if (!control) return;
+      control.setAttribute("aria-label", playing ? "Pause" : "Play");
+      control.innerHTML = mediaIcon(playing);
+    };
+    video.addEventListener("timeupdate", () => {
+      const bar = root.querySelector(`[data-video-bar="${slot}"]`);
+      if (bar && video.duration) bar.style.width = `${(video.currentTime / video.duration) * 100}%`;
+    });
+    video.addEventListener("play", () => setPlaying(true));
+    video.addEventListener("pause", () => setPlaying(false));
+    video.addEventListener("ended", () => setPlaying(false));
+  });
 }
 
 function syncVideoTimer() {
@@ -213,6 +296,7 @@ function esc(value) {
 }
 
 function sourceLine(shot) {
+  if (shot.source === "Upload") return "Uploaded video";
   if (shot.source === "History") return `History · ${shot.sessionDate}`;
   if (shot.source === "Tour") return `Tour · ${shot.tourPlayer}`;
   return shot.live ? "Current session · Shot tracker" : "Current session";
@@ -230,6 +314,7 @@ function newestFirst(shots) {
  */
 function orderedShotsFor(shot) {
   if (!shot) return [];
+  if (shot.videoOnly) return [shot];
   if (shot.source === "Tour") {
     const person = tourPlayers.find((item) => item.shots.some((itemShot) => itemShot.id === shot.id));
     if (!person) return [shot];
@@ -307,7 +392,7 @@ function ensureVisualiser(slot) {
 
 function playSlot(slot) {
   const el = visualisers[slot];
-  const shot = slot === "shell" ? getShot(activeShotId()) : slotShot(slot);
+  const shot = slot === "shell" ? findShot(activeShotId()) : slotShot(slot);
   if (!el || !shot || el.dataset.ready !== "1") return;
   if (!el.closest("[data-traj-slot]")) return;
   if (el.dataset.playedId === shot.id) return;
@@ -396,6 +481,7 @@ function render() {
   mountVisualisers();
   syncVideoTimer();
   bindSplit();
+  bindUploadedVideos();
 
   if (page) {
     page.scrollTop = pageTop;
@@ -490,7 +576,7 @@ function sessionShotRowsHtml() {
 }
 
 function shellHtml() {
-  const selected = getShot(activeShotId());
+  const selected = findShot(activeShotId());
   return `
     <div class="app-shell">
       <header class="topbar">
@@ -624,7 +710,7 @@ function slotHtml(slot) {
     return `
       <section class="slot slot-empty">
         <div class="empty-copy">
-          <p class="helper-text">Choose a shot from this session, a historical session, or the tour player library.</p>
+          <p class="helper-text">Choose a shot from this session, a historical session, or the tour player library, or upload a video.</p>
           <button class="button button--primary" type="button" data-action="open-picker" data-slot="${slot}">Add shot</button>
         </div>
         ${picker}
@@ -632,26 +718,32 @@ function slotHtml(slot) {
     `;
   }
 
-  const view = slotView(slot);
-  const { atTop, atBottom } = stepEnds(shot);
-  const prev = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="prev" aria-label="Previous shot"${atTop ? " disabled" : ""}>${chevron("left")}</button>`;
-  const next = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="next" aria-label="Next shot"${atBottom ? " disabled" : ""}>${chevron("right")}</button>`;
-  const change = `<button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>`;
-  const arrows = state.shotNavStyle === "split"
-    ? `${prev}${change}${next}`
-    : `<span class="slot-step">${prev}${next}</span>${change}`;
+  const view = shot.videoOnly ? "video" : slotView(slot);
+  const title = shot.videoOnly ? shot.label : `${shot.club} · ${shot.label}`;
+  const nav = shot.videoOnly
+    ? `<button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>`
+    : (() => {
+        const { atTop, atBottom } = stepEnds(shot);
+        const prev = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="prev" aria-label="Previous shot"${atTop ? " disabled" : ""}>${chevron("left")}</button>`;
+        const next = `<button class="icon-button" type="button" data-action="step" data-slot="${slot}" data-dir="next" aria-label="Next shot"${atBottom ? " disabled" : ""}>${chevron("right")}</button>`;
+        const change = `<button class="button" type="button" data-action="open-picker" data-slot="${slot}">Change shot</button>`;
+        const arrows = state.shotNavStyle === "split"
+          ? `${prev}${change}${next}`
+          : `<span class="slot-step">${prev}${next}</span>${change}`;
+        return arrows;
+      })();
   return `
     <section class="slot">
       <header class="slot-head">
         <div>
-          <h2 class="slot-club">${esc(shot.club)} · ${esc(shot.label)}</h2>
+          <h2 class="slot-club">${esc(title)}</h2>
           <p class="helper-text">${esc(sourceLine(shot))}</p>
         </div>
         <div class="slot-shot-nav${state.shotNavStyle === "split" ? "" : " is-left"}">
-          ${arrows}
+          ${nav}
         </div>
       </header>
-      ${viewSwitchHtml(slot, shot.label, view)}
+      ${shot.videoOnly ? "" : viewSwitchHtml(slot, shot.label, view)}
       <div class="slot-view">${viewHtml(slot, shot, view)}</div>
       ${picker}
     </section>
@@ -667,8 +759,32 @@ function viewHtml(slot, shot, view) {
   return numbersHtml(slot, shot, "table");
 }
 
+function downloadButton(slot) {
+  return `<button class="icon-button" type="button" data-action="download-video" data-slot="${slot}" aria-label="Download video">${downloadIcon()}</button>`;
+}
+
+function downloadIcon() {
+  return `<svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 V9.5 M5.5 7 L8 9.5 L10.5 7 M3.5 12.5 H12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function uploadedVideoHtml(slot, shot) {
+  return `
+    <div class="video-view">
+      <div class="video-frame">
+        <video class="video-still" data-upload-video="${slot}" src="${esc(shot.url)}" playsinline></video>
+      </div>
+      <div class="video-controls">
+        <button class="icon-button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}" aria-label="Play">${mediaIcon(false)}</button>
+        <div class="video-track"><span data-video-bar="${slot}" style="width:0%"></span></div>
+        ${downloadButton(slot)}
+      </div>
+    </div>
+  `;
+}
+
 function videoHtml(slot, shot) {
   if (!shot.hasVideo) return `<div class="video-view">${noVideoHtml()}</div>`;
+  if (shot.videoOnly) return uploadedVideoHtml(slot, shot);
   const clip = state.video[slot];
   const angle = clip.angle === "dl" ? "dl" : "fo";
   const open = Boolean(state.videoTiles[slot]);
@@ -687,6 +803,7 @@ function videoHtml(slot, shot) {
         <button class="icon-button" type="button" data-action="video" data-slot="${slot}" data-video-toggle="${slot}" aria-label="${clip.playing ? "Pause" : "Play"}">${mediaIcon(clip.playing)}</button>
         <div class="video-track"><span data-video-bar="${slot}" style="width:${clip.progress * 100}%"></span></div>
         <button class="button video-tiles-toggle" type="button" data-action="video-tiles" data-slot="${slot}" aria-expanded="${open ? "true" : "false"}" aria-label="${open ? "Hide data tiles" : "Show data tiles"}">${chevron(open ? "down" : "up")}</button>
+        ${downloadButton(slot)}
       </div>
       ${open ? `<div class="video-tiles">${tileMarkup(slot, shot)}</div>` : ""}
     </div>
@@ -1208,12 +1325,12 @@ function clearTour() {
 
 function pickerHtml(slot) {
   const currentId = slot === "left" ? state.leftShotId : state.rightShotId;
-  const labels = { session: "Current session", history: "History", tour: "Tour library" };
+  const labels = { session: "Current session", history: "History", tour: "Tour library", upload: "Upload video" };
   return `
     <div class="picker">
       <div class="picker-head">
         <div class="view-switch">
-          ${["session", "history", "tour"]
+          ${["session", "history", "tour", "upload"]
             .map((source) => {
               const on = state.pickerSource === source ? " is-on" : "";
               return `<button class="view-button${on}" type="button" data-action="source" data-source="${source}">${labels[source]}</button>`;
@@ -1223,6 +1340,21 @@ function pickerHtml(slot) {
         ${closeControl("close-picker", "picker-close")}
       </div>
       <div class="picker-list">${pickerRows(currentId)}</div>
+    </div>
+  `;
+}
+
+function uploadPanel() {
+  const note = state.uploadNote ? `<p class="helper-text upload-note">${esc(state.uploadNote)}</p>` : "";
+  return `
+    <div class="upload-drop" data-upload-drop>
+      <p>Drop a video here</p>
+      <p class="helper-text">mp4, mov, or webm</p>
+      ${note}
+      <label class="button button--primary upload-choose">
+        Choose file
+        <input class="upload-input" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,.m4v" data-upload-input />
+      </label>
     </div>
   `;
 }
@@ -1238,6 +1370,7 @@ function pickerRows(currentId) {
     return orderedShotRows(visibleSessionShots(), currentId);
   }
   if (state.pickerSource === "tour") return tourRows(currentId);
+  if (state.pickerSource === "upload") return uploadPanel();
   const session = historySessions.find((item) => item.id === state.historySessionId);
   if (!session) {
     return historySessions
@@ -1513,6 +1646,7 @@ root.addEventListener("click", (event) => {
   } else if (action === "source") {
     state.pickerSource = target.dataset.source;
     state.historySessionId = null;
+    state.uploadNote = "";
     clearTour();
   } else if (action === "history-session") {
     state.historySessionId = target.dataset.session;
@@ -1540,9 +1674,23 @@ root.addEventListener("click", (event) => {
     const angle = target.dataset.angle;
     if (clip && (angle === "fo" || angle === "dl")) clip.angle = angle;
   } else if (action === "video") {
-    const clip = state.video[target.dataset.slot];
+    const slot = target.dataset.slot;
+    const shot = clipShot(slot);
+    if (shot?.videoOnly) {
+      const video = root.querySelector(`[data-upload-video="${slot}"]`);
+      if (!video) return;
+      if (video.paused) video.play().catch(() => {});
+      else video.pause();
+      return;
+    }
+    const clip = state.video[slot];
     if (clip.progress >= 1) clip.progress = 0;
     clip.playing = !clip.playing;
+  } else if (action === "download-video") {
+    const slot = target.dataset.slot;
+    const shot = clipShot(slot);
+    if (shot?.hasVideo) downloadShotVideo(shot, slot);
+    return;
   } else if (action === "debug-toggle") {
     state.debugOpen = !state.debugOpen;
   } else if (action === "view-style") {
@@ -1664,10 +1812,39 @@ root.addEventListener("input", (event) => {
 });
 
 root.addEventListener("change", (event) => {
+  const uploadInput = event.target.closest("[data-upload-input]");
+  if (uploadInput) {
+    const file = uploadInput.files && uploadInput.files[0];
+    if (file) acceptUpload(file);
+    uploadInput.value = "";
+    return;
+  }
   const select = event.target.closest(".shotlist-metric-select");
   if (!select) return;
   if (metricDefs.some(([key]) => key === select.value)) state.listMetric = select.value;
   render();
+});
+
+root.addEventListener("dragover", (event) => {
+  const zone = event.target.closest("[data-upload-drop]");
+  if (!zone) return;
+  event.preventDefault();
+  zone.classList.add("is-over");
+});
+
+root.addEventListener("dragleave", (event) => {
+  const zone = event.target.closest("[data-upload-drop]");
+  if (!zone || zone.contains(event.relatedTarget)) return;
+  zone.classList.remove("is-over");
+});
+
+root.addEventListener("drop", (event) => {
+  const zone = event.target.closest("[data-upload-drop]");
+  if (!zone) return;
+  event.preventDefault();
+  zone.classList.remove("is-over");
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file) acceptUpload(file);
 });
 
 render();

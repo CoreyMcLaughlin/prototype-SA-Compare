@@ -1429,9 +1429,44 @@ p {
   margin-top: var(--space-xs);
 }
 
-.picker-list {
-  flex: 1;
-  overflow: auto;
+:root[data-view-style="segmented"] .picker-head .view-switch {
+  flex-wrap: wrap;
+}
+
+:root[data-view-style="segmented"] .picker-head .view-switch .view-button {
+  flex: 1 1 auto;
+}
+
+.upload-drop {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: center;
+  margin: var(--space-lg);
+  padding: var(--space-section);
+  border: 1px dashed var(--stroke-subtle);
+  text-align: center;
+}
+
+.upload-drop.is-over {
+  border-color: var(--brand);
+  background: var(--selected-tint);
+}
+
+.upload-note {
+  color: var(--brand);
+}
+
+.upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.upload-choose {
+  position: relative;
+  cursor: pointer;
 }
 
 .tour-search {
